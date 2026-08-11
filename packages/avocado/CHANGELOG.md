@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.2 (2026-08-11)
+
+### Bug Fixes
+
+- **envelope**: Report plugin presets + correct format_raw under preset
+  ([`49012d0`](https://github.com/evanfang0054/avocado-d2c/commit/49012d065b06430a13a74fa00ceb44b754e046d8))
+
+
 ## v1.0.1 (2026-08-11)
 
 ### Chores
