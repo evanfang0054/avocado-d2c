@@ -50,6 +50,14 @@ class CssVariableCollection:
     # var_id (short) → original full VariableID
     full_ids: dict[str, str] = field(default_factory=dict)
 
+    # Var-map hit tracking: how many bindings matched a var_map entry vs
+    # fell back to fig-var-<short>. When var_map is empty, matched=0 and
+    # total = number of bindings collected. Lets the caller (cli.py envelope)
+    # warn when --var-map loaded 0 mappings so users don't silently get
+    # unreadable fig-var-XXX names.
+    var_map_matched: int = 0
+    var_map_total: int = 0
+
     def add(self, full_id: str, value: str | float | None) -> str:
         """Add a variable. Returns the short name to use in CSS.
 
@@ -124,13 +132,6 @@ def collect_variables(
     return collection
 
 
-def _semantic_name(full_id: str, var_map: dict[str, str]) -> str:
-    """Resolve a VariableID to its semantic CSS name, or fig-var-<short>."""
-    if full_id in var_map:
-        return var_map[full_id]
-    return _short_id(full_id)
-
-
 def _var_ref(
     full_id: str,
     fallback: str | float | None,
@@ -139,7 +140,11 @@ def _var_ref(
     collection: CssVariableCollection,
 ) -> str:
     """Build a `var(--name, fallback)` string and register the variable."""
-    name = _semantic_name(full_id, var_map)
+    matched = full_id in var_map
+    collection.var_map_total += 1
+    if matched:
+        collection.var_map_matched += 1
+    name = var_map[full_id] if matched else _short_id(full_id)
     # Always register short → full for collection completeness
     short = _short_id(full_id)
     collection.full_ids[short] = full_id

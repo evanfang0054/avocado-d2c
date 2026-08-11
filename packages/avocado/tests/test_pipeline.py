@@ -212,3 +212,66 @@ def test_text_escape_special_chars() -> None:
     assert "&lt;" in jsx
     assert "&gt;" in jsx
     assert "&amp;" in jsx
+
+
+# ── HTML mode must not emit ES6 imports ──
+
+
+def test_html_mode_strips_component_imports() -> None:
+    """HTML output is not a JS module — ES6 import statements are illegal.
+
+    When a plugin marks nodes with component_package (name-based recognizer),
+    react format collects them into import lines but html format must drop
+    them entirely; otherwise browsers render the import as text.
+    """
+    from avocado.model.tree_node import TreeNode
+
+    root = TreeNode(
+        id="1:1",
+        name="Page",
+        source_type="FRAME",
+        tag_name="Button",
+        is_component=True,
+        component_package="my-component-lib",
+        children=[
+            TreeNode(
+                id="1:2",
+                name="Divider",
+                source_type="FRAME",
+                tag_name="Divider",
+                is_component=True,
+                component_package="my-component-lib",
+            )
+        ],
+    )
+
+    # HTML mode: no import lines
+    html_out = render_jsx(root, format="html")
+    assert "import" not in html_out
+    assert "from \"" not in html_out
+
+    # React mode: import lines present (sanity check that the tree really has
+    # components to import — otherwise the html assertion above is vacuous)
+    react_out = render_jsx(root, format="react")
+    assert "import" in react_out
+    assert "my-component-lib" in react_out
+
+
+def test_html_mode_preserves_box_sizing_without_imports() -> None:
+    """HTML mode with box_sizing emits the <style> reset but still no imports."""
+    from avocado.model.tree_node import TreeNode
+
+    root = TreeNode(
+        id="1:1",
+        name="Page",
+        source_type="FRAME",
+        tag_name="Button",
+        is_component=True,
+        component_package="my-component-lib",
+    )
+
+    out = render_jsx(root, format="html", box_sizing="content-box")
+    # box_sizing style tag is present
+    assert "<style>*{box-sizing:content-box}</style>" in out
+    # but no import leaked
+    assert "import" not in out
