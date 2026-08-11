@@ -109,7 +109,7 @@ def prefetch_image_nodes(
     """
     from avocado.api.figma import FigmaNotFoundError
 
-    stats = {"raster": (0, 0), "vector": (0, 0)}
+    stats = {"raster": (0, 0), "vector": (0, 0), "errors": []}
     if not client or not file_key:
         return stats
 
@@ -139,6 +139,10 @@ def prefetch_image_nodes(
                 results = {}
             except Exception as e:  # noqa: BLE001
                 log.warning("image prefetch %s failed: %s", kind, e)
+                # FIX: surface prefetch failures (403 auth etc.) to the caller so
+                # cli.py can add an envelope warning — the output images would be
+                # broken but the generation previously "succeeded" silently.
+                stats["errors"].append(f"image prefetch {kind} failed: {e}")
                 results = {}
             # results includes cache hits + freshly fetched.
             fetched_total = len(results)

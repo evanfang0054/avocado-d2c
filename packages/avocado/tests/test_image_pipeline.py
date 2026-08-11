@@ -186,11 +186,13 @@ def test_prefetch_returns_zero_when_no_client_or_file_key() -> None:
     assert prefetch_image_nodes(None, "key", scene) == {
         "raster": (0, 0),
         "vector": (0, 0),
+        "errors": [],
     }
     client = MagicMock()
     assert prefetch_image_nodes(client, "", scene) == {
         "raster": (0, 0),
         "vector": (0, 0),
+        "errors": [],
     }
 
 

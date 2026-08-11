@@ -363,6 +363,58 @@ def main(
                 hint="omit -o to get JSX in data.jsx, or write to a real file path",
                 exit_code=2,
             )
+    # FIX: --token format validation on the main <url> command (aligned with init).
+    # Previously only `avocado init --token` validated; the main command accepted
+    # any garbage token (dry-run even passed it through), so agents got ok=true
+    # envelopes while image fetches silently 403'd.
+    if token is not None:
+        token_stripped = token.strip()
+        if not token_stripped or len(token_stripped) < 20:
+            if human:
+                _human_error(
+                    f"--token value too short (got {len(token_stripped)} chars, "
+                    "figma tokens are typically 40+ chars)",
+                    "check your token — Figma Personal Access Tokens start with 'figd_' and are 40+ chars",
+                    exit_code=2,
+                )
+            emit_error(
+                "invalid_argument",
+                f"--token value too short (got {len(token_stripped)} chars, "
+                f"figma tokens are typically 40+ chars)",
+                hint="check your token — Figma Personal Access Tokens start with 'figd_' and are 40+ chars",
+                exit_code=2,
+            )
+        if len(token_stripped) > 200:
+            if human:
+                _human_error(
+                    f"--token too long (got {len(token_stripped)} chars, "
+                    "figma tokens are typically 40-60 chars)",
+                    "check your token — a real Figma Personal Access Token is 40-60 chars",
+                    exit_code=2,
+                )
+            emit_error(
+                "invalid_argument",
+                f"--token too long (got {len(token_stripped)} chars, "
+                f"figma tokens are typically 40-60 chars)",
+                hint="check your token — a real Figma Personal Access Token is 40-60 chars",
+                exit_code=2,
+            )
+        # FIX: reject tokens containing newlines (YAML injection defense, same as init)
+        if "\n" in token_stripped or "\r" in token_stripped:
+            if human:
+                _human_error(
+                    "--token must not contain newlines (YAML injection protection)",
+                    "tokens are single-line; check for copy/paste artifacts",
+                    exit_code=2,
+                )
+            emit_error(
+                "invalid_argument",
+                "--token must not contain newlines (YAML injection protection)",
+                hint="tokens are single-line; check for copy/paste artifacts",
+                exit_code=2,
+            )
+        token = token_stripped  # normalized: later code sees the stripped value
+
     # format_raw: user's raw --format input (before preset expansion / mapping).
     # Use ParameterSource to distinguish "user passed --format on CLI" from
     # "click default value" — the latter happens when --preset indirectly sets
@@ -703,6 +755,12 @@ def main(
         stats = prefetch_image_nodes(client, ref.file_key, scene)
         r_hit, r_fetch = stats["raster"]
         v_hit, v_fetch = stats["vector"]
+        # FIX: surface image-prefetch failures (e.g. 403 auth) in the envelope —
+        # previously the failure only went to stderr logging and data.warnings
+        # stayed None, so agents got ok=true with silently broken images.
+        for err in stats.get("errors", []):
+            click.echo(f"warning: {err}", err=True)
+            warnings.append(err)
         total = r_hit + r_fetch + v_hit + v_fetch
         # Image-prefetch logging is silent by default (meaningless to agents/new users).
         # Only printed when AVOCADO_VERBOSE=1 (for developer debugging; FIX: no -v flag).
@@ -933,7 +991,7 @@ def main(
         # Use an explicit note (not a warning) so users don't think "beautify failed".
         if output_format == "html":
             warnings.append(
-                "beautify skipped for HTML output (HTML fragment is not a "
+                "beautify skipped for HTML output (HTML document is not a "
                 "JS/JSX module; use --format react to enable beautify)"
             )
         else:
@@ -1099,43 +1157,37 @@ def main(
 
     # FIX: collect a structured list of unrecognized INSTANCEs (name + componentId)
     # for agents to extract programmatically (rather than parsing hint text)
-    def _collect_unrecognized_instances(scene_node, tree_node) -> list[dict]:
-        """Walk the scene tree, find INSTANCE nodes that are unrecognized in the tree (name, componentId).
+    def _collect_unrecognized_instances(tree_node) -> list[dict]:
+        """Return truly-unrecognized INSTANCEs from tree inspect warnings.
 
-        After the unwrap/inherit_promote passes, the tree structure
-        differs from the scene tree (index alignment shifts). Match by figma_id instead —
-        first recursively collect the set of figma_ids with is_component=True from the tree,
-        then walk the scene tree and check whether each INSTANCE id is in that set.
+        map_node emits an `instance-not-recognized` inspect entry exactly when a
+        VISIBLE INSTANCE fails component mapping (hidden nodes are pruned before
+        mapping, so they never get a warning). Using these warnings is more
+        accurate than diffing scene INSTANCE ids against tree is_component
+        figma_ids, which drifted after unwrap/inherit_promote passes and
+        miscounted hidden nodes (e.g. instances nested under a hidden parent).
         """
-        # first collect all is_component=True figma_ids from the tree
-        recognized_ids: set[str] = set()
+        import re
 
-        def _collect_recognized_ids(node) -> None:
-            if getattr(node, "is_component", False):
-                fid = getattr(node, "figma_id", "") or ""
-                if fid:
-                    recognized_ids.add(fid)
-            for c in getattr(node, "children", []) or []:
-                _collect_recognized_ids(c)
-
-        if tree_node:
-            _collect_recognized_ids(tree_node)
-
-        # then walk the scene tree checking INSTANCEs
         results: list[dict] = []
 
-        def _walk_scene(node) -> None:
-            if getattr(node, "type", "") == "INSTANCE":
-                node_id = getattr(node, "id", "") or ""
-                if node_id not in recognized_ids:
-                    nm = getattr(node, "name", "") or ""
-                    cid = getattr(node, "component_id", "") or ""
-                    if nm:
-                        results.append({"name": nm, "component_id": cid})
+        def _walk(node) -> None:
+            for w in node.inspect:
+                if w.get("code") != "instance-not-recognized":
+                    continue
+                nm = getattr(node, "name", "") or ""
+                if not nm:
+                    continue
+                # componentId is only in the message text: INSTANCE 'X'
+                # (componentId='9:403') not in component mapping table; ...
+                m = re.search(r"componentId=([^)]*)", w.get("message", "") or "")
+                cid = m.group(1).strip().strip("'\"") if m else ""
+                results.append({"name": nm, "component_id": cid})
             for c in getattr(node, "children", []) or []:
-                _walk_scene(c)
+                _walk(c)
 
-        _walk_scene(scene_node)
+        if tree_node:
+            _walk(tree_node)
         return results
 
     # ── subcommand mode: agent-native envelope output ──
@@ -1289,7 +1341,7 @@ def main(
             # FIX: collect structured unrecognized_instances (always in the recognition object)
             from collections import Counter
 
-            unrecognized_list = _collect_unrecognized_instances(scene, tree)
+            unrecognized_list = _collect_unrecognized_instances(tree)
             # dedupe + take top 10 (avoid envelope bloat)
             name_counts = Counter(u["name"] for u in unrecognized_list)
             top_unrecognized = [

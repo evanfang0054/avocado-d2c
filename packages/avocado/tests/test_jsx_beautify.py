@@ -30,6 +30,14 @@ def test_beautify_handles_self_closing() -> None:
     assert "/>" in out
 
 
+def test_beautify_boolean_attributes() -> None:
+    # JSX boolean attrs (<Stepper block />, <input disabled>) have no `=value`;
+    # they used to crash beautify with `list index out of range`.
+    out = beautify("<div><input disabled checked /><Stepper block>x</Stepper></div>;")
+    assert "<input disabled checked/>" in out
+    assert "<Stepper block>" in out
+
+
 def test_beautify_style_object_expands_multiline() -> None:
     out = beautify('<div style={{color: "red", fontSize: "14px"}}>x</div>;')
     assert "style={{\n" in out
