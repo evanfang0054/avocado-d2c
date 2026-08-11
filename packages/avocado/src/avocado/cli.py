@@ -343,18 +343,23 @@ def main(
     warnings: list[str] = []
 
     # FIX: forbid -o /dev/stdout (JSX + envelope both writing stdout breaks the JSON contract)
+    # Also forbid /dev/null & /dev/zero: they accept writes but you can never
+    # read the code back, so the "read output_path for the code" hint misleads.
+    _rejected_output = {"/dev/stdout", "/dev/fd/1", "-", "/dev/null", "/dev/zero"}
     if output is not None:
         out_str = str(output)
-        if out_str in ("/dev/stdout", "/dev/fd/1") or out_str == "-":
+        if out_str in _rejected_output:
             if human:
                 click.echo(
-                    "error: -o /dev/stdout is not allowed (would mix JSX + envelope on stdout)",
+                    f"error: -o {out_str!r} is not allowed "
+                    "(would discard the generated code or mix with the JSON envelope)",
                     err=True,
                 )
                 sys.exit(2)
             emit_error(
                 "invalid_argument",
-                f"-o {out_str!r} is not allowed — would mix JSX with JSON envelope on stdout",
+                f"-o {out_str!r} is not allowed — the generated code would be lost "
+                "or mixed with the JSON envelope on stdout",
                 hint="omit -o to get JSX in data.jsx, or write to a real file path",
                 exit_code=2,
             )
@@ -826,8 +831,12 @@ def main(
         # warning the output silently uses fig-var-<short> names instead of
         # the semantic names the user expected.
         if css_collection.var_map_total > 0 and css_collection.var_map_matched == 0:
-            _vm_src = str(var_map_path) if var_map_path else (
-                f"--component-lib {component_lib} auto-load" if component_lib else "(unknown)"
+            _vm_src = (
+                str(var_map_path)
+                if var_map_path
+                else (
+                    f"--component-lib {component_lib} auto-load" if component_lib else "(unknown)"
+                )
             )
             warnings.append(
                 f"--var-map loaded from {_vm_src} but matched 0 / "
@@ -947,6 +956,13 @@ def main(
     # The --html-fragment flag reverts to the old bare <div> fragment behavior.
     # Wrapping happens after beautify (HTML mode already skips beautify, no conflict).
     # Issue 9: when preview_centered=True, add preview-centering styles (gray bg + centered + shadow).
+    # --html-fragment only makes sense for HTML output; with react/other formats
+    # the flag is silently meaningless, so warn instead of pretending it applies.
+    if html_fragment and output_format.lower() != "html":
+        warnings.append(
+            f"--html-fragment is ignored for --format {output_format} "
+            "(it only applies to --format html)"
+        )
     html_wrapped = False
     if output_format.lower() == "html" and not html_fragment:
         from avocado.generator.html_doc import wrap_html_document
@@ -957,6 +973,15 @@ def main(
     # Write artifacts to disk if -o was given. This happens in BOTH human and
     # envelope modes — the file is the source of truth for downstream tools
     # (renderers, diff scripts). Only the stdout/stderr presentation differs.
+    # --summary has no effect under --human (stdout is raw JSX, not an
+    # envelope) — surface a stderr warning instead of silently ignoring it.
+    if human and summary:
+        click.secho(
+            "WARNING: --summary is ignored under --human "
+            "(human mode emits raw JSX to stdout, not an envelope)",
+            fg="yellow",
+            err=True,
+        )
     if output:
         # FIX: when -o points to an uncreatable path (e.g. /nonexistent_root/path.jsx) and
         # mkdir/write fails, wrap it uniformly as an envelope so a blank stdout doesn't crash AI agent json.loads
@@ -1443,8 +1468,7 @@ def main(
         # subclass (defaults to empty when the plugin doesn't load any preset).
         if registry.plugins:
             data["plugins_applied"] = [
-                {"name": p.name, "presets_used": list(p.presets_used)}
-                for p in registry.plugins
+                {"name": p.name, "presets_used": list(p.presets_used)} for p in registry.plugins
             ]
             data["mode"]["_plugins_note"] = (
                 "component_lib only reflects the CLI --component-lib flag; "
@@ -1909,10 +1933,7 @@ def _dispatch_schema() -> None:
     # schema/paths/<url> commands all emit JSON envelopes by default, so the
     # flag is redundant here but agents can pass it without hitting an error.
     _schema_known_flags = {"-h", "--help", "--human", "--format", "json"}
-    _unknown = [
-        a for a in sys.argv[1:]
-        if a.startswith("-") and a not in _schema_known_flags
-    ]
+    _unknown = [a for a in sys.argv[1:] if a.startswith("-") and a not in _schema_known_flags]
     if _unknown:
         emit_error(
             "invalid_argument",

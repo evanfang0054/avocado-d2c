@@ -38,6 +38,7 @@ plugins".
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import sys
 from collections.abc import Callable
@@ -147,7 +148,13 @@ class HookRegistry:
 
         current_args = list(args)
         for handler in self._handlers[hook_name]:
-            result = handler(*current_args)
+            # Guard stdout during plugin execution. avocado's contract is
+            # "stdout is always a single JSON envelope"; a plugin calling
+            # print() (e.g. for debugging) would otherwise leak text into
+            # stdout and break envelope parsing for agents. Redirect to
+            # stderr during the handler call so the envelope stays clean.
+            with contextlib.redirect_stdout(sys.stderr):
+                result = handler(*current_args)
             # For modify_* and generate_template: result is the new target
             if hook_name in {
                 "modify_props",

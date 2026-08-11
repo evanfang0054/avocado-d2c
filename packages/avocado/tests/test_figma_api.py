@@ -52,15 +52,53 @@ def test_parse_url_file_form() -> None:
     assert ref.node_id == "10:20"
 
 
-def test_parse_bare_key() -> None:
-    ref = parse_figma_url("abc123def")
-    assert ref.file_key == "abc123def"
-    assert ref.node_id == "0:0"
+def test_parse_bare_key_rejected_without_node_id() -> None:
+    """A bare file_key is rejected: it has no node-id to fetch.
+
+    Previously this silently fell back to node_id='0:0', which produced a
+    confusing offline cache miss for node '0:0'. Now it raises FigmaError
+    with an actionable message (copy full URL from Figma).
+    """
+    with pytest.raises(FigmaError) as excinfo:
+        parse_figma_url("abc123def")
+    assert "no node-id" in str(excinfo.value)
+
+
+def test_parse_bare_key_invalid_format_still_rejected() -> None:
+    """Short/non-alphanumeric bare keys are rejected as before."""
+    with pytest.raises(FigmaError):
+        parse_figma_url("short")
+
+
+def test_parse_full_url_with_node_id_still_works() -> None:
+    """Full URLs with node-id parse normally (not affected by the fix)."""
+    ref = parse_figma_url("https://www.figma.com/design/ABCDEF/Title?node-id=1732:5574")
+    assert ref.file_key == "ABCDEF"
+    assert ref.node_id == "1732:5574"
 
 
 def test_parse_url_missing_node_id() -> None:
     with pytest.raises(FigmaError):
         parse_figma_url("https://www.figma.com/design/ABCDEF/Title")
+
+
+def test_parse_url_invalid_node_id_dot_separator() -> None:
+    """A dot-separated node-id (1732.5574) must be rejected as invalid."""
+    with pytest.raises(FigmaError) as excinfo:
+        parse_figma_url("https://www.figma.com/design/ABCDEF/Title?node-id=1732.5574")
+    assert "invalid node-id" in str(excinfo.value)
+
+
+def test_parse_url_invalid_node_id_underscore() -> None:
+    """An underscore node-id must be rejected as invalid."""
+    with pytest.raises(FigmaError):
+        parse_figma_url("https://www.figma.com/design/ABCDEF/Title?node-id=1732_5574")
+
+
+def test_parse_url_dash_node_id_converts_to_colon() -> None:
+    """URL form uses '-' as separator; API form uses ':'. Both accepted."""
+    ref = parse_figma_url("https://www.figma.com/design/ABCDEF/Title?node-id=1732-5574")
+    assert ref.node_id == "1732:5574"
 
 
 def test_token_required(monkeypatch: pytest.MonkeyPatch) -> None:
