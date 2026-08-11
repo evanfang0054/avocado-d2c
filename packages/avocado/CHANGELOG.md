@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.0.1 (2026-08-11)
+
+### Chores
+
+- Allow zero versions in semantic-release config
+  ([`c7cb9b2`](https://github.com/evanfang0054/avocado-d2c/commit/c7cb9b2f7b163e579734e928247e81d1e3bf2bf6))
+
+- Support manual force release via workflow_dispatch
+  ([`5627a24`](https://github.com/evanfang0054/avocado-d2c/commit/5627a24275165362e978093d74c970784f2fb41e))
+
+### Documentation
+
+- Switch license to Apache-2.0
+  ([`da192ca`](https://github.com/evanfang0054/avocado-d2c/commit/da192ca7a9c043a47abc14b45e513ee697767cf8))
+
+- Update changelog and version badge to v1.0.0
+  ([`d92a015`](https://github.com/evanfang0054/avocado-d2c/commit/d92a015da453ec27d9da16947ae379dcfa25f7ac))
+
+
 ## v1.0.0 (2026-08-11)
 
 - 首个开源发布（PyPI 包名 `avocado-d2c`）
