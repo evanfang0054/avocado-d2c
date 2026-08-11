@@ -155,15 +155,21 @@ def _fmt_attr_value(node, indent: int) -> str:
     return node.text.decode()
 
 
+def _fmt_attr(attr_node, indent: int) -> str:
+    """Format a jsx_attribute: `name=value`, or bare boolean attr (`<input disabled>`)."""
+    name = attr_node.children[0].text.decode()
+    if len(attr_node.children) < 3:  # boolean attribute: no `=` + value
+        return name
+    return f"{name}={_fmt_attr_value(attr_node.children[2], indent)}"
+
+
 def _fmt_open(node, indent: int) -> str:
     """Format jsx_opening_element: `<div style={{...}}>` (attrs expanded)."""
     tag = node.children[1].text.decode()  # children[0] is '<', [1] is the tag name
     attrs = [c for c in node.children if c.type == "jsx_attribute"]
     if not attrs:
         return f"<{tag}>"
-    parts = [
-        f"{a.children[0].text.decode()}={_fmt_attr_value(a.children[2], indent)}" for a in attrs
-    ]
+    parts = [_fmt_attr(a, indent) for a in attrs]
     return f"<{tag} " + " ".join(parts) + ">"
 
 
@@ -192,10 +198,7 @@ def _reprint(node, indent: int, out: list[str]) -> None:
         if not attrs:
             out.append(pad + f"<{tag}/>")
         else:
-            parts = [
-                f"{a.children[0].text.decode()}={_fmt_attr_value(a.children[2], indent)}"
-                for a in attrs
-            ]
+            parts = [_fmt_attr(a, indent) for a in attrs]
             out.append(pad + f"<{tag} " + " ".join(parts) + "/>")
     elif node.type == "jsx_fragment":
         kids = [

@@ -56,7 +56,7 @@ avocado "<figma-url>" -o out.jsx
 
 默认行为（1.0.0 起）：
 - **stdout 是 JSON envelope**（不是裸 JSX），`data.jsx` 是生成的代码
-- `-o` 写文件后 envelope 仍回传 `data.jsx`（除非 `--summary`）+ `data.output_path` + `data.code_location`
+- `-o` 写文件后 envelope 省略 `data.jsx`（`jsx_omitted=True`，与 `--summary` 一致）+ `data.output_path` + `data.code_location`，读 `data.output_path` 取代码
 - 退出码：`0`=ok / `1`=业务错误 / `2`=参数错误 / `130`=SIGINT
 - envelope 顶层含 `{"name":"avocado","version":"1.0.0"}`（工具身份识别）
 
@@ -260,7 +260,7 @@ d2c 输出必须**确定性**（同输入同输出）——回归靠 diff 对比
       "precision": 2, "box_sizing": null,
       "figma_id": false, "depth": null,
       "has_output": true,
-      "passes": {"inherit_promote": true, "strip_defaults": true, "unwrap_single": true,
+      "passes": {"inherit_promote": true, "strip_defaults": true, "unwrap_single_child": true,
                  "gap_to_margin": false, "auto_group_variance": false},
       "_beautify_note": "..." // 可选，beautify=True 但 beautified=False 时关联 warnings
     },
