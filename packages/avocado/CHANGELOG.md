@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.0.5 (2026-08-11)
+
+### Bug Fixes
+
+- **beautify**: Boolean JSX attrs crash (list index out of range) [#22]
+  ([`e9615e1`](https://github.com/evanfang0054/avocado-d2c/commit/e9615e18ab06489dc92d0d4f5b3b03f7d8a7b22c))
+
+- **issues**: Batch fix open issues #17-#22
+  ([`e9615e1`](https://github.com/evanfang0054/avocado-d2c/commit/e9615e18ab06489dc92d0d4f5b3b03f7d8a7b22c))
+
+
 ## v1.0.4 (2026-08-11)
 
 ### Bug Fixes
