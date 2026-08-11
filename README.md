@@ -2,7 +2,7 @@
 
 *Figma Design-to-Code 工具 —— 一条命令把 Figma 节点转成 React JSX / HTML + CSS。*
 
-[![Version](https://img.shields.io/badge/version-0.3.0-3ddc84.svg?style=flat-square)](packages/avocado/pyproject.toml)
+[![PyPI version](https://img.shields.io/pypi/v/avocado-d2c.svg?style=flat-square)](https://pypi.org/project/avocado-d2c/)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](packages/avocado/pyproject.toml)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg?style=flat-square)](packages/avocado/pyproject.toml)
 

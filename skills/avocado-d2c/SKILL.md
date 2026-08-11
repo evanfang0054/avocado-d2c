@@ -54,11 +54,11 @@ stdout 是 JSON envelope：`{"ok": true, "data": {"name": "avocado", "commands":
 avocado "<figma-url>" -o out.jsx
 ```
 
-默认行为（0.3.0 起）：
+默认行为（1.0.0 起）：
 - **stdout 是 JSON envelope**（不是裸 JSX），`data.jsx` 是生成的代码
 - `-o` 写文件后 envelope 仍回传 `data.jsx`（除非 `--summary`）+ `data.output_path` + `data.code_location`
 - 退出码：`0`=ok / `1`=业务错误 / `2`=参数错误 / `130`=SIGINT
-- envelope 顶层含 `{"name":"avocado","version":"0.3.0"}`（工具身份识别）
+- envelope 顶层含 `{"name":"avocado","version":"1.0.0"}`（工具身份识别）
 
 ### Step 3：解析 envelope（字段全集）
 
@@ -332,4 +332,4 @@ agent 解析时只读 stdout，stderr 仅用于人类查看 / debug。
 - envelope 契约：`avocado/envelope.py`（error code 字典见 `avocado schema`）
 - agent 集成示例：`docs/agent-integration.md`
 - 命令清单真相源：`avocado/commands/schema.py:_SPEC`（cli.py 加 flag 必须同步更新）
-- 版本号：以 `avocado schema` 输出的 `data.version` 为准（本文档 "0.3.0 起" 为撰写时版本）
+- 版本号：以 `avocado schema` 输出的 `data.version` 为准（本文档 "1.0.0 起" 为撰写时版本）
