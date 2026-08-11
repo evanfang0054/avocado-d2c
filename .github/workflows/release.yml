@@ -1,0 +1,75 @@
+name: Release
+
+# Semantic versioning driven by Conventional Commits:
+#   fix(...)  -> patch (0.3.0 -> 0.3.1)
+#   feat(...) -> minor (0.3.0 -> 0.4.0)
+#   breaking change (BREAKING CHANGE: / !) -> major (or minor while at 0.x, see major_on_zero)
+#
+# On every push to main this workflow computes the next version, updates
+# pyproject.toml, writes CHANGELOG.md, tags the release, creates a GitHub
+# Release, and (if a release happened) publishes the wheel/sdist to PyPI
+# using Trusted Publishing (OIDC — no API tokens stored in secrets).
+#
+# First-time setup:
+#   1. Push the repo to GitHub, then tag the current version:
+#        git tag v0.3.0 && git push origin v0.3.0
+#   2. On PyPI (https://pypi.org/manage/account/publishing/), add a trusted
+#      publisher for project "avocado-d2c":
+#        owner: <your-github-username>  (or the org that owns the repo)
+#        repository: avocado-d2c
+#        workflow name: Release
+#   3. Merge commits with Conventional Commits messages; releases happen
+#      automatically.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ github.ref_name }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      # OIDC token for PyPI Trusted Publishing (no secrets needed)
+      id-token: write
+    steps:
+      # Force checkout of the branch that triggered the workflow, then pin it
+      # to the exact workflow SHA so we never release un-evaluated changes.
+      - name: Checkout Repository on Release Branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Force Release Branch to Workflow SHA
+        run: git reset --hard ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Semantic Version Release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v10.6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          directory: packages/avocado
+
+      - name: Upload Distribution Artifacts
+        if: steps.release.outputs.released == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: distribution-artifacts
+          path: packages/avocado/dist/
+
+      - name: Publish to PyPI (Trusted Publishing)
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/avocado/dist/

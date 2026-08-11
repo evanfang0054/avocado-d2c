@@ -1,0 +1,17 @@
+# Component mapping for tests
+# Maps INSTANCE nodes by name to business components.
+components:
+  - name: "Button"
+    component: "Button"
+    package: "antd"
+    props:
+      type: "default"
+
+  - name: "Progress Indicator"
+    component: "Progress"
+    package: "antd"
+
+  # Match by componentId (more precise than name)
+  - componentId: "1454:7935"
+    component: "IconArrow"
+    package: "@ant-design/icons"

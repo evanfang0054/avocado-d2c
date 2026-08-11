@@ -1,0 +1,66 @@
+[project]
+name = "avocado-d2c"
+version = "0.3.0"
+description = "Figma Design to Code (D2C) Python implementation"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "avocado contributors" }]
+license = { text = "Apache-2.0" }
+
+dependencies = [
+    "requests>=2.31.0",
+    "click>=8.1.7",
+    "pyyaml>=6.0.1",
+    "tree-sitter>=0.26",
+    "tree-sitter-javascript>=0.25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.1.6",
+    "pillow>=10.0.0",  # image preprocessing tests (PIL is optional in runtime, required for dev/test)
+]
+
+[project.scripts]
+avocado = "avocado.cli:cli"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+avocado = ["_bundled/**/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]  # formatter handles line length
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["-v", "--strict-markers"]
+markers = [
+    "live: tests that hit real Figma API (require FIGMA_TOKEN, skipped in CI)",
+    "slow: tests that are slow (>1s)",
+]
+
+[tool.semantic_release]
+# Single source of truth: bump the version inside this pyproject.toml
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+changelog_file = "CHANGELOG.md"
+build_command = "pip install build && python -m build"
+# While the project is at 0.x, a breaking change bumps minor (0.3.0 -> 0.4.0)
+# instead of jumping to 1.0.0.
+major_on_zero = true
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+commit_message = "chore(release): {version} [skip ci]"

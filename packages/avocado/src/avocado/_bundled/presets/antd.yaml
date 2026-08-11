@@ -1,0 +1,118 @@
+# Ant Design preset example for avocado.
+#
+# 这是一个**中立示例** preset，用 Ant Design（开源、广泛使用、组件名标准化）。
+# 复制到 ~/.avocado/presets/antd.yaml 并按需修改。
+#
+# 完整字段说明见 docs/preset-guide.md（9 字段 + componentId alias + leaf + extractor）
+#
+# 用法：
+#   avocado <url> --component-lib antd -o out.jsx
+#
+# 注意：antd 组件的 Props 可能与你的项目不同，请根据实际 antd 版本调整
+# variantProperties 的映射值。
+
+components:
+  # ── 基础组件 ──
+  - name: Button
+    component: Button
+    package: 'antd'
+    variantProperties:
+      type:
+        primary:   { type: primary }
+        default:   { type: default }
+        dashed:    { type: dashed }
+        link:      { type: link }
+        text:      { type: text }
+      size:
+        large:     { size: large }
+        middle:    {}
+        small:     { size: small }
+      danger:
+        'true':    { danger: true }
+
+  - name: Input
+    component: Input
+    package: 'antd'
+    leaf: true  # 叶子组件，清 children（avocado 的 leaf 模式）
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: Input.Password
+    component: Input.Password
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: InputNumber
+    component: InputNumber
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: Select
+    component: Select
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  # ── 表单 ──
+  - name: Checkbox
+    component: Checkbox
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: Radio
+    component: Radio
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: Switch
+    component: Switch
+    package: 'antd'
+    leaf: true
+    leafExtras: ['helper text', 'error message', 'hint text']
+
+  - name: Slider
+    component: Slider
+    package: 'antd'
+
+  # ── 展示 ──
+  - name: Card
+    component: Card
+    package: 'antd'
+
+  - name: Modal
+    component: Modal
+    package: 'antd'
+
+  - name: Tag
+    component: Tag
+    package: 'antd'
+
+  # ── 导航 ──
+  - name: Menu
+    component: Menu
+    package: 'antd'
+
+  # ── 反馈 ──
+  - name: Badge
+    component: Badge
+    package: 'antd'
+
+  - name: Tooltip
+    component: Tooltip
+    package: 'antd'
+
+  - name: Alert
+    component: Alert
+    package: 'antd'
+
+  # ── 布局 ──
+  - name: Divider
+    component: Divider
+    package: 'antd'
+
+  - name: Spin
+    component: Spin
+    package: 'antd'

@@ -1,0 +1,116 @@
+{
+  "id": "I1732:4247;1454:7939",
+  "name": "Button Label",
+  "type": "TEXT",
+  "scrollBehavior": "SCROLLS",
+  "componentPropertyReferences": {
+    "characters": "Button Label#1458:0"
+  },
+  "boundVariables": {
+    "fills": [
+      {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:e1662d14189765657dd312f72859c6b0e65f94ce/15165:7"
+      }
+    ],
+    "lineHeight": [
+      {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:1bb554638f5879479b38a5a9f44c062bd26ad882/15156:392"
+      }
+    ],
+    "fontWeight": [
+      {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:542c965a2f442c0f451fc1cf7f3f1b9b9f40eea7/15156:331"
+      }
+    ],
+    "fontFamily": [
+      {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:a430ff4961236f5eef378069cc06408ba99d2db5/15161:188"
+      }
+    ],
+    "fontSize": [
+      {
+        "type": "VARIABLE_ALIAS",
+        "id": "VariableID:f3e9e5d47d7a9d040866e89664f5657bf159e935/15156:332"
+      }
+    ]
+  },
+  "blendMode": "PASS_THROUGH",
+  "fills": [
+    {
+      "blendMode": "NORMAL",
+      "type": "SOLID",
+      "color": {
+        "r": 0.0,
+        "g": 0.41960784792900085,
+        "b": 0.6000000238418579,
+        "a": 1.0
+      },
+      "boundVariables": {
+        "color": {
+          "type": "VARIABLE_ALIAS",
+          "id": "VariableID:e1662d14189765657dd312f72859c6b0e65f94ce/15165:7"
+        }
+      }
+    }
+  ],
+  "strokes": [],
+  "strokeWeight": 1.0,
+  "strokeAlign": "OUTSIDE",
+  "absoluteBoundingBox": {
+    "x": 1643.999755859375,
+    "y": 1892.0,
+    "width": 40.0,
+    "height": 24.0
+  },
+  "absoluteRenderBounds": {
+    "x": 1645.51220703125,
+    "y": 1898.1600341796875,
+    "width": 38.067626953125,
+    "height": 11.9840087890625
+  },
+  "constraints": {
+    "vertical": "TOP",
+    "horizontal": "LEFT"
+  },
+  "layoutAlign": "INHERIT",
+  "layoutGrow": 0.0,
+  "layoutSizingHorizontal": "HUG",
+  "layoutSizingVertical": "HUG",
+  "characters": "Back ",
+  "characterStyleOverrides": [],
+  "styleOverrideTable": {},
+  "lineTypes": [
+    "NONE"
+  ],
+  "lineIndentations": [
+    0
+  ],
+  "style": {
+    "fontFamily": "Poppins",
+    "fontPostScriptName": "Poppins-Medium",
+    "fontStyle": "Medium",
+    "fontWeight": 500,
+    "textAutoResize": "WIDTH_AND_HEIGHT",
+    "fontSize": 16.0,
+    "textAlignHorizontal": "CENTER",
+    "textAlignVertical": "CENTER",
+    "letterSpacing": 0.0,
+    "lineHeightPx": 24.0,
+    "lineHeightPercent": 100.0,
+    "lineHeightPercentFontSize": 150.0,
+    "lineHeightUnit": "PIXELS"
+  },
+  "layoutVersion": 4,
+  "styles": {
+    "text": "9:559"
+  },
+  "effects": [],
+  "interactions": [],
+  "complexStrokeProperties": {
+    "strokeType": "BASIC"
+  }
+}
