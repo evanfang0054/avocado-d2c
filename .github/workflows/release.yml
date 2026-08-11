@@ -24,6 +24,17 @@ name: Release
 on:
   push:
     branches: [main]
+  # Manual trigger: force a release even for doc-only commits (semantic-release
+  # skips docs/chore by default). E.g. re-publish metadata/license changes:
+  #   Actions -> Release -> Run workflow -> Force version bump: patch
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force version bump (for doc-only releases)"
+        required: false
+        default: ""
+        type: choice
+        options: ["", "patch", "minor", "major"]
 
 permissions:
   contents: read
@@ -60,6 +71,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           directory: packages/avocado
+          force: ${{ inputs.force }}
 
       - name: Upload Distribution Artifacts
         if: steps.release.outputs.released == 'true'
