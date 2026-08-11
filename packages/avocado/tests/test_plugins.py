@@ -207,3 +207,70 @@ def test_plugin_presets_used_independent_per_instance() -> None:
     b.presets_used.append("other-lib")
     assert a.presets_used == []
     assert b.presets_used == ["my-preset-lib", "other-lib"]
+
+
+# ── stdout guard: plugin print() must not leak into stdout ──
+
+
+def test_plugin_print_redirected_to_stderr(capsys) -> None:
+    """A plugin calling print() during a hook must not pollute stdout.
+
+    avocado's contract is "stdout is always a single JSON envelope". A plugin
+    that prints for debugging would otherwise leak text into stdout and break
+    envelope parsing. HookRegistry.call redirects handler stdout to stderr.
+    """
+
+    from avocado.model.tree_node import TreeNode
+
+    class NoisyPlugin(Plugin):
+        name = "noisy"
+
+        @hook("modify_style")
+        def add_px(self, node, style):
+            print("DEBUG: styling node")  # plugin author's debug print
+            return dict(style)
+
+    reg = HookRegistry()
+    reg.register(NoisyPlugin())
+    node = TreeNode(id="0", name="n", source_type="RECTANGLE", style={"width": 100})
+    result = reg.call("modify_style", node, dict(node.style))
+
+    # Hook still works and returns the modified style
+    assert result == {"width": 100}
+
+    # stdout must be clean (no debug text leaked)
+    stdout, stderr = capsys.readouterr()
+    assert "DEBUG: styling node" not in stdout
+    # debug output went to stderr instead
+    assert "DEBUG: styling node" in stderr
+
+
+def test_plugin_print_redirected_multi_hooks(capsys) -> None:
+    """Each handler's stdout is guarded independently across hooks."""
+
+    from avocado.model.tree_node import TreeNode
+
+    class PrinterPlugin(Plugin):
+        name = "printer"
+
+        @hook("modify_style")
+        def a(self, node, style):
+            print("hook-a")
+            return dict(style)
+
+        @hook("modify_json_schema")
+        def b(self, _ignored, root):
+            print("hook-b")
+            return root
+
+    reg = HookRegistry()
+    reg.register(PrinterPlugin())
+    node = TreeNode(id="0", name="n", source_type="RECTANGLE", style={})
+    reg.call("modify_style", node, {})
+    reg.call("modify_json_schema", None, node)
+
+    stdout, stderr = capsys.readouterr()
+    assert "hook-a" not in stdout
+    assert "hook-b" not in stdout
+    assert "hook-a" in stderr
+    assert "hook-b" in stderr

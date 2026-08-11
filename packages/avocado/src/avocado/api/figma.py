@@ -78,6 +78,8 @@ class FigmaCacheMissError(FigmaError):
 # https://www.figma.com/file/FILE_KEY/Title?node-id=0:1
 # plain file key "abc123"
 _URL_RE = re.compile(r"figma\.com/(?:design|file)/([A-Za-z0-9_\-]+)(?:/[^\?]*)?")
+# Figma node ids are "N:N" (URL form may use "-" instead of ":")
+_NODE_ID_RE = re.compile(r"^\d+:\d+$")
 
 
 @dataclass(frozen=True)
@@ -95,11 +97,12 @@ class FigmaNodeRef:
 def parse_figma_url(url_or_key: str) -> FigmaNodeRef:
     """Parse a Figma URL or bare file key into a FigmaNodeRef.
 
-    If a bare file key is passed without a node-id, node_id will be "0:0"
-    (root). Caller should usually provide a full URL.
-
     Reject strings that are clearly not a URL/file_key (e.g. "init"/"version")
     to avoid wasting requests on the Figma API. A bare file_key must be >= 8 alphanumeric chars.
+
+    Raises:
+        FigmaError: when the string is not a valid URL/file_key, the URL is
+            missing ``?node-id=``, or the node-id has an invalid format.
     """
     if "figma.com" not in url_or_key:
         # Treat as bare file key
@@ -111,7 +114,14 @@ def parse_figma_url(url_or_key: str) -> FigmaNodeRef:
                 f"not a valid figma url or file_key: {url_or_key!r} "
                 f"(expected figma.com URL or bare file_key >= 8 alphanumeric chars)"
             )
-        return FigmaNodeRef(file_key=url_or_key, node_id="0:0")
+        # A bare file_key has no node-id — do not silently fall back to "0:0"
+        # (that produces a confusing offline cache miss for node '0:0' later).
+        raise FigmaError(
+            f"bare file_key {url_or_key!r} has no node-id. "
+            "Expected a full figma.com URL with ?node-id= (e.g. "
+            "https://www.figma.com/design/XXXX/Title?node-id=1:2). "
+            "Right-click the node in Figma → Copy link to get the full URL."
+        )
 
     m = _URL_RE.search(url_or_key)
     if not m:
@@ -126,6 +136,15 @@ def parse_figma_url(url_or_key: str) -> FigmaNodeRef:
         raise FigmaError(f"url missing ?node-id= query parameter: {url_or_key!r}")
     # URL form uses "-" but Figma API uses ":"
     node_id = node_id_raw.replace("-", ":")
+    # Validate node-id format: Figma node ids are "N:N" (colon or dash
+    # separator, URL form converts dash to colon above). Reject dots,
+    # underscores, spaces, or any other separator — a malformed id would
+    # otherwise surface later as a confusing API/cache error.
+    if not _NODE_ID_RE.match(node_id):
+        raise FigmaError(
+            f"invalid node-id {node_id_raw!r} — expected 'N:N' or 'N-N' "
+            f"(e.g. node-id=1732:5574 or node-id=1732-5574)"
+        )
     return FigmaNodeRef(file_key=file_key, node_id=node_id)
 
 

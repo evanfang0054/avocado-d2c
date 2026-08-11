@@ -248,7 +248,7 @@ def test_html_mode_strips_component_imports() -> None:
     # HTML mode: no import lines
     html_out = render_jsx(root, format="html")
     assert "import" not in html_out
-    assert "from \"" not in html_out
+    assert 'from "' not in html_out
 
     # React mode: import lines present (sanity check that the tree really has
     # components to import — otherwise the html assertion above is vacuous)

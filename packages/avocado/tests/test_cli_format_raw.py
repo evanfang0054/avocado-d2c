@@ -89,3 +89,36 @@ def test_format_raw_user_explicit_overrides_preset(monkeypatch) -> None:
     assert validated["format"] == "react"
     # user explicitly passed react → format_raw must reflect user input
     assert validated["format_raw"] == "react"
+
+
+# ── -o /dev/null rejection (before dry-run short-circuit) ──
+
+
+def test_output_dev_null_rejected(monkeypatch) -> None:
+    """-o /dev/null is rejected: the code would be lost and the 'read the
+    output file' hint would mislead (cat /dev/null returns nothing)."""
+    monkeypatch.setenv("FIGMA_TOKEN", "dummy")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main,
+        [_URL, "--dry-run", "-o", "/dev/null"],
+    )
+    assert result.exit_code == 2
+    env = json.loads(result.output)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "invalid_argument"
+    assert "/dev/null" in env["error"]["message"]
+
+
+def test_output_dev_stdout_rejected(monkeypatch) -> None:
+    """-o /dev/stdout is rejected (would mix JSX with the JSON envelope)."""
+    monkeypatch.setenv("FIGMA_TOKEN", "dummy")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main,
+        [_URL, "--dry-run", "-o", "/dev/stdout"],
+    )
+    assert result.exit_code == 2
+    env = json.loads(result.output)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "invalid_argument"
