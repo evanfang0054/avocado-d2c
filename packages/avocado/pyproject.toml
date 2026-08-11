@@ -60,7 +60,9 @@ branch = "main"
 changelog_file = "CHANGELOG.md"
 build_command = "pip install build && python -m build"
 # While the project is at 0.x, a breaking change bumps minor (0.3.0 -> 0.4.0)
-# instead of jumping to 1.0.0.
+# instead of jumping to 1.0.0. allow_zero_version keeps 0.x releases valid
+# (the default false would force any 0.x project straight to 1.0.0).
 major_on_zero = true
+allow_zero_version = true
 commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 commit_message = "chore(release): {version} [skip ci]"
