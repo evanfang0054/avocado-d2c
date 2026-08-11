@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-08-11)
+
+### Bug Fixes
+
+- **cli**: Batch CLI usability and envelope accuracy fixes
+  ([`014aa5b`](https://github.com/evanfang0054/avocado-d2c/commit/014aa5b0a70f16755b8cdf37a2d5df5f8fdff637))
+
+
 ## v1.0.2 (2026-08-11)
 
 ### Bug Fixes
