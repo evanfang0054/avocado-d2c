@@ -94,6 +94,33 @@ class FigmaNodeRef:
         return self.node_id.replace(":", "-")
 
 
+def _resolve_render_url(resp: dict, node_id: str, url_form: str | None = None) -> str | None:
+    """Extract the render URL for `node_id` from a /v1/images response.
+
+    Returns None when the API returned no URL for this node (Figma returns
+    `images: {id: null}` for ids it cannot render).
+    """
+    images = resp.get("images", {}) or {}
+    url = images.get(node_id)
+    if url is None and url_form:
+        url = images.get(url_form)
+    return url if isinstance(url, str) and url else None
+
+
+def _combo_ancestor_ids(node_id: str) -> list[str]:
+    """Return progressively shorter ancestor ids for a combo id.
+
+    Deeply nested instance children have ids like `I7209:27835;3298:3151;1593:34334`
+    (instance-of-instance chains). The render API can render the intermediate
+    instance ids but not the deepest child, so we try each ancestor in order —
+    nearest first (most precise).
+    """
+    parts = node_id.split(";")
+    if len(parts) < 3:
+        return []
+    return [";".join(parts[:i]) for i in range(len(parts) - 1, 0, -1)]
+
+
 def parse_figma_url(url_or_key: str) -> FigmaNodeRef:
     """Parse a Figma URL or bare file key into a FigmaNodeRef.
 
@@ -408,10 +435,17 @@ class FigmaClient:
                 f"Run once online with --cache-dir to populate."
             )
         resp = self._get(path, params=params)
-        images = resp.get("images", {})
-        url = images.get(ref.node_id) or images.get(ref.node_id_url_form)
+        url = _resolve_render_url(resp, ref.node_id, ref.node_id_url_form)
         if not url:
-            raise FigmaNotFoundError(f"image render failed for {ref.node_id!r}: {resp}")
+            # FIX: explain WHY the render failed. Figma returns images[id]=null
+            # for deeply nested instance ids (I7209:27835;3298:3151;1593:34334);
+            # callers (image.py) use this to pick a fallback.
+            raise FigmaNotFoundError(
+                f"image render failed for {ref.node_id!r}: "
+                f"Figma returned no image for this node "
+                f"(nested-instance combo ids cannot be rendered; "
+                f"images={resp.get('images')!r})"
+            )
         if self._cache_dir:
             # Download the rendered image to cache and return the local path.
             try:

@@ -277,6 +277,11 @@ class SceneNode:
 
     # ── VECTOR-only (partial) ──
     boolean_operation: str | None = None
+    # Vector path data (VECTOR/BOOLEAN_OPERATION): list of {path, windingRule}
+    # dicts in local coordinates (0..width/0..height). Empty for nodes whose
+    # geometry lives in a component definition (deeply nested instances).
+    fill_geometry: list[dict] = field(default_factory=list)
+    stroke_geometry: list[dict] = field(default_factory=list)
 
     # ── raw payload (debug, optional) ──
     raw: dict | None = None
@@ -341,5 +346,7 @@ class SceneNode:
             component_properties=dict(d.get("componentProperties", {}) or {}),
             overrides=dict(d.get("overrides", {}) or {}),
             boolean_operation=d.get("booleanOperation"),
+            fill_geometry=list(d.get("fillGeometry", []) or []),
+            stroke_geometry=list(d.get("strokeGeometry", []) or []),
             raw=d,  # optional debug aid; strip in production if memory matters
         )

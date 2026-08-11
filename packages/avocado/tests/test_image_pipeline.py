@@ -21,6 +21,74 @@ from avocado.parser.image_prefetch import (
 )
 from avocado.parser.style import style_from_scene
 
+# ── render fallback helpers (issue #24) ─────────────────────────────────────
+
+
+def test_combo_ancestor_ids() -> None:
+    from avocado.api.figma import _combo_ancestor_ids
+
+    # 3-segment combo id → progressively shorter ancestors
+    assert _combo_ancestor_ids("I7209:27835;3298:3151;1593:34334") == [
+        "I7209:27835;3298:3151",
+        "I7209:27835",
+    ]
+    # 2 segments → no ancestors (renderable directly)
+    assert _combo_ancestor_ids("I7209:27835;3298:3151") == []
+    # plain id → no ancestors
+    assert _combo_ancestor_ids("1732:5574") == []
+
+
+def test_resolve_render_url_handles_null_image() -> None:
+    from avocado.api.figma import _resolve_render_url
+
+    # Figma returns images[id]=null for nodes it cannot render
+    assert _resolve_render_url({"images": {"1:2": None}}, "1:2") is None
+    assert _resolve_render_url({"images": {}}, "1:2") is None
+    assert _resolve_render_url({"images": {"1:2": "https://x"}}, "1:2") == "https://x"
+    # url-form fallback
+    assert _resolve_render_url({"images": {"1-2": "https://x"}}, "1:2", "1-2") == "https://x"
+
+
+def test_inline_svg_data_uri() -> None:
+    from avocado.parser.image import _inline_svg_data_uri
+
+    scene = SceneNode.from_dict(
+        {
+            "id": "I7209:27835;3298:3151;1593:34329",
+            "name": "AMEX",
+            "type": "BOOLEAN_OPERATION",
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 23.489, "height": 6.047},
+            "fills": [{"type": "SOLID", "color": {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0}}],
+            "fillGeometry": [{"path": "M2.65 0L0 6.04Z", "windingRule": "NONZERO"}],
+        }
+    )
+    uri = _inline_svg_data_uri(scene)
+    assert uri and uri.startswith("data:image/svg+xml;base64,")
+
+    # no geometry → None (caller keeps the original error path)
+    empty = SceneNode.from_dict(
+        {
+            "id": "p",
+            "name": "Path",
+            "type": "VECTOR",
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 10, "height": 10},
+        }
+    )
+    assert _inline_svg_data_uri(empty) is None
+
+    # geometry but no fill/stroke color → None
+    no_color = SceneNode.from_dict(
+        {
+            "id": "p",
+            "name": "Path",
+            "type": "VECTOR",
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 10, "height": 10},
+            "fillGeometry": [{"path": "M0 0L10 10Z"}],
+        }
+    )
+    assert _inline_svg_data_uri(no_color) is None
+
+
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
