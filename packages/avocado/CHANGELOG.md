@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.4 (2026-08-11)
+
+### Bug Fixes
+
+- **plugin,url**: Guard plugin stdout + validate node-id format
+  ([`6804b7f`](https://github.com/evanfang0054/avocado-d2c/commit/6804b7f536e225287adedd848f9d63f0796551b7))
+
+
 ## v1.0.3 (2026-08-11)
 
 ### Bug Fixes
