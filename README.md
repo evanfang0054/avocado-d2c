@@ -3,7 +3,7 @@
 *Figma Design-to-Code 工具 —— 一条命令把 Figma 节点转成 React JSX / HTML + CSS。*
 
 [![PyPI version](https://img.shields.io/pypi/v/avocado-d2c.svg?style=flat-square)](https://pypi.org/project/avocado-d2c/)
-[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](packages/avocado/pyproject.toml)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg?style=flat-square)](packages/avocado/pyproject.toml)
 
 avocado 是纯 Python 实现的 Figma D2C（Design-to-Code）工具：输入 Figma 节点 URL，输出可直接交付的 React JSX 或 HTML + CSS。既给前端开发者日常出码，也给 AI agent 程序化调用。
