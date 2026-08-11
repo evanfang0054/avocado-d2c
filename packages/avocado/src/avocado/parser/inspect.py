@@ -177,11 +177,19 @@ def rule_image_fetch_failed(root: TreeNode) -> list[dict]:
         # Check the _image_error prop (cli.py cleans it up before render_jsx,
         # but inspect runs before render_jsx, so it can still detect it)
         if hasattr(n, "props") and n.props.get("_image_error"):
+            # FIX: don't truncate the error at 80 chars — the Figma render
+            # failure detail (which node id, what the API returned) is what
+            # lets the agent judge the root cause.
             n.add_inspect(
                 severity="warning",
                 code="image-fetch-failed",
-                message=f"<img> {n.name!r} fetch failed: {n.props['_image_error'][:80]}",
-                suggestion="check the figma imageRef or run once online to repopulate the cache (--cache-dir)",
+                message=f"<img> {n.name!r} fetch failed: {n.props['_image_error']}",
+                suggestion=(
+                    "check the figma imageRef or run once online to repopulate the cache (--cache-dir). "
+                    "If the node id is a nested-instance combo id (I<file>:<id>;<id>;...), the Figma "
+                    "render API cannot export it — avocado falls back to the nearest renderable "
+                    "ancestor or inline SVG when vector geometry is available"
+                ),
             )
         # Also detect the src="" case (_image_error already cleaned up but src still empty)
         elif n.is_img and n.props.get("src") == "":
@@ -189,7 +197,11 @@ def rule_image_fetch_failed(root: TreeNode) -> list[dict]:
                 severity="warning",
                 code="image-fetch-failed",
                 message=f"<img> {n.name!r} has empty src (fetch failed)",
-                suggestion="check the figma imageRef or run once online to repopulate the cache (--cache-dir)",
+                suggestion=(
+                    "check the figma imageRef or run once online to repopulate the cache (--cache-dir). "
+                    "If the node id is a nested-instance combo id, the Figma render API cannot "
+                    "export it (avocado falls back to the nearest renderable ancestor)"
+                ),
             )
         for c in n.children:
             stack.append(c)

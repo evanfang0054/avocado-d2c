@@ -411,9 +411,20 @@ def render_as_image(
         try:
             url = client.get_image(ref, format=fmt, scale=scale)
         except Exception as e:
-            # FIX: same as above — don't write a TODO comment; use an
-            # empty src + an error marker. cli.py's main collects
-            # _image_error and adds a warning to the envelope.
+            # FIX: graceful fallback when the Figma render API cannot export
+            # this node (deeply nested instance ids return images[id]=null):
+            #   1) inline SVG from vector geometry — lossless, no API call
+            #   2) nearest renderable ancestor id (drops trailing combo-id
+            #      segments) so the image area is not left blank
+            #   3) empty src + error marker
+            svg_uri = _inline_svg_data_uri(scene)
+            if svg_uri:
+                tree.props["src"] = svg_uri
+                return svg_uri
+            ancestor_url = _ancestor_render_url(client, ref, fmt=fmt, scale=scale)
+            if ancestor_url:
+                tree.props["src"] = ancestor_url
+                return ancestor_url
             tree.props["src"] = ""
             tree.props["_image_error"] = f"image fetch failed: {e}"
             return None
@@ -455,3 +466,75 @@ def render_as_image(
 
     tree.props["src"] = url
     return url
+
+
+def _ancestor_render_url(
+    client: FigmaClient,
+    ref: FigmaNodeRef,
+    *,
+    fmt: str = "svg",
+    scale: float = 1.0,
+) -> str | None:
+    """Try rendering progressively shorter ancestor ids.
+
+    Figma render API cannot export deeply nested instance children (combo ids
+    like ``I7209:27835;3298:3151;1593:34334``), but it CAN render the
+    intermediate instance ids. Returns the first working ancestor URL, or None.
+    """
+    from avocado.api.figma import _combo_ancestor_ids
+
+    for ancestor_id in _combo_ancestor_ids(ref.node_id):
+        try:
+            return client.get_image(
+                FigmaNodeRef(file_key=ref.file_key, node_id=ancestor_id),
+                format=fmt,
+                scale=scale,
+            )
+        except Exception:
+            continue
+    return None
+
+
+def _inline_svg_data_uri(scene: SceneNode) -> str | None:
+    """Build a data-URI SVG from Figma vector geometry (fillGeometry).
+
+    Fallback for nodes the Figma render API cannot export (deeply nested
+    instance ids return images[id]=null). Requires at least one fill path +
+    a visible SOLID color; returns None when the node carries no usable
+    geometry (the caller then keeps the original error path).
+    """
+    import base64
+
+    paths = [g.get("path") for g in (scene.fill_geometry or []) if g.get("path")]
+    if not paths:
+        return None
+    if not scene.box or not scene.box.width or not scene.box.height:
+        return None
+    fill = next(
+        (p for p in (scene.fills or []) if getattr(p, "visible", True) and p.type == "SOLID"),
+        None,
+    )
+    stroke = next(
+        (p for p in (scene.strokes or []) if getattr(p, "visible", True) and p.type == "SOLID"),
+        None,
+    )
+    if fill is None and stroke is None:
+        return None
+
+    from avocado.parser.style import paint_color_to_css
+
+    fill_css = paint_color_to_css(fill) if fill else "none"
+    w = scene.box.width
+    h = scene.box.height
+    if stroke:
+        stroke_css = paint_color_to_css(stroke) or "none"
+        stroke_w = float(scene.stroke_weight or 1.0)
+        stroke_attr = f' stroke="{stroke_css}" stroke-width="{stroke_w}"'
+    else:
+        stroke_attr = ""
+    path_elems = "".join(f'<path d="{p}" fill="{fill_css}"{stroke_attr}/>' for p in paths)
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+        f'viewBox="0 0 {w} {h}">{path_elems}</svg>'
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
