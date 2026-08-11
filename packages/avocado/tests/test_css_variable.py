@@ -362,3 +362,81 @@ def test_collect_variables_uses_var_map() -> None:
     collect_variables(scene, tree, var_map=var_map, with_fallback=True)
     br = tree.style.get("border-radius", "")
     assert br == "var(--radius-md, 8px)"
+
+
+# ── var_map hit/miss tracking ──
+
+
+def test_var_map_matched_counts_hits() -> None:
+    """var_map_matched/total correctly count bindings that hit the var_map."""
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Box",
+            "type": "RECTANGLE",
+            "visible": True,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 50},
+            "cornerRadius": 8,
+            "boundVariables": {
+                "cornerRadius": {
+                    "id": "VariableID:abc/11:11",
+                    "type": "VARIABLE_ALIAS",
+                }
+            },
+        }
+    )
+    tree = map_node(scene)
+    var_map = {"VariableID:abc/11:11": "radius-md"}
+    collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+    assert collection.var_map_matched == 1
+    assert collection.var_map_total == 1
+
+
+def test_var_map_matched_counts_misses() -> None:
+    """When the binding's VariableID is not in var_map, matched stays 0 but total increments."""
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Box",
+            "type": "RECTANGLE",
+            "visible": True,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 50},
+            "cornerRadius": 8,
+            "boundVariables": {
+                "cornerRadius": {
+                    "id": "VariableID:abc/11:11",
+                    "type": "VARIABLE_ALIAS",
+                }
+            },
+        }
+    )
+    tree = map_node(scene)
+    # var_map with a non-matching key — the binding's VariableID isn't in it
+    var_map = {"VariableID:different/22:22": "radius-md"}
+    collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+    assert collection.var_map_matched == 0
+    assert collection.var_map_total == 1
+
+
+def test_var_map_empty_does_not_count() -> None:
+    """When var_map is empty, total still counts bindings (matched=0)."""
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Box",
+            "type": "RECTANGLE",
+            "visible": True,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 50},
+            "cornerRadius": 8,
+            "boundVariables": {
+                "cornerRadius": {
+                    "id": "VariableID:abc/11:11",
+                    "type": "VARIABLE_ALIAS",
+                }
+            },
+        }
+    )
+    tree = map_node(scene)
+    collection = collect_variables(scene, tree, var_map={}, with_fallback=True)
+    assert collection.var_map_matched == 0
+    assert collection.var_map_total == 1

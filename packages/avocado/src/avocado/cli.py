@@ -108,7 +108,12 @@ def _human_error(msg: str, hint: str | None = None, exit_code: int = 2) -> None:
     "--depth",
     type=int,
     default=None,
-    help="Max tree depth when fetching from Figma API.",
+    help=(
+        "Max tree depth when fetching from Figma API. "
+        "Warning: low values (1-5) significantly truncate the tree; "
+        "Figma designs typically nest 10-20 levels. "
+        "Use depth >= 20 for full coverage, or omit for unlimited."
+    ),
 )
 @click.option(
     "--inspect/--no-inspect",
@@ -452,6 +457,15 @@ def main(
             click.echo(f"error: {msg}", err=True)
             sys.exit(2)
         emit_error("invalid_argument", msg, exit_code=2)
+    # Low depth warning: Figma designs typically nest 10-20 levels, so low
+    # values produce near-empty output. Don't fail — just surface a hint so
+    # the user understands why the output is sparse.
+    if depth is not None and depth < 5:
+        warnings.append(
+            f"--depth {depth} significantly truncates the tree "
+            "(Figma designs typically nest 10-20 levels). "
+            "Use depth >= 20 for full coverage, or omit for unlimited."
+        )
     # FIX: when --var-map is passed explicitly the file must exist (otherwise Click path validation + silent later behavior)
     if var_map_path is not None and not var_map_path.exists():
         msg = f"--var-map file not found: {var_map_path}"
@@ -759,6 +773,7 @@ def main(
             stack.extend(n.children)
 
     # ── CSS variable replacement ──
+    css_collection = None  # set when css_vars=True; surfaced in envelope
     if css_vars:
         # FIX: error out when an explicit --var-map file is missing instead of silently ignoring it
         if var_map_path is not None and not var_map_path.exists():
@@ -804,7 +819,24 @@ def main(
                 "--css-vars enabled but no --var-map given (and no --component-lib auto-load), "
                 "all CSS variable references will use fallback values"
             )
-        collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+        css_collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+        # Warn when --var-map was provided but matched zero bindings — the user
+        # explicitly opted in but the Figma file has no usable boundVariables
+        # (or the VariableIDs don't match the var-map keys). Without this
+        # warning the output silently uses fig-var-<short> names instead of
+        # the semantic names the user expected.
+        if css_collection.var_map_total > 0 and css_collection.var_map_matched == 0:
+            _vm_src = str(var_map_path) if var_map_path else (
+                f"--component-lib {component_lib} auto-load" if component_lib else "(unknown)"
+            )
+            warnings.append(
+                f"--var-map loaded from {_vm_src} but matched 0 / "
+                f"{css_collection.var_map_total} bindings — possible causes: "
+                "(1) the Figma file uses Styles not Variables; "
+                "(2) var-map keys don't match this file's VariableIDs; "
+                "(3) --depth too low returned shallow boundVariables. "
+                "All CSS variable references will use fig-var-<short> fallback names."
+            )
 
     # Run all inspectDraft rules. Warnings attach to tree nodes in-place;
     # the return value is intentionally discarded (call sites use tree.inspect).
@@ -1421,6 +1453,16 @@ def main(
                 "non-empty, the generated code may import components from "
                 "those preset libraries even if component_lib is None."
             )
+        # Surface var-map hit rate so agents can tell whether --var-map
+        # actually applied. ``matched`` counts bindings whose VariableID was
+        # in the var-map (semantic name used); ``total`` counts all bindings
+        # encountered. When matched=0 the output falls back to fig-var-<short>
+        # names — see warnings for actionable hints.
+        if css_collection is not None:
+            data["var_map_applied"] = {
+                "matched": css_collection.var_map_matched,
+                "total": css_collection.var_map_total,
+            }
         # FIX: explain when beautify=True but beautified=False (tie it to warnings)
         if beautify_flag and not beautified:
             data["mode"]["_beautify_note"] = (
@@ -1863,8 +1905,14 @@ def _dispatch_schema() -> None:
             click.echo(f"- `{code}` (exit {info.get('exit_code', 1)}): {info.get('hint', '')}")
         sys.exit(0)
     # FIX: schema validates unknown flags (previously `avocado schema --nonexistent` returned ok:true)
-    _schema_known_flags = {"-h", "--help", "--human"}
-    _unknown = [a for a in sys.argv[1:] if a.startswith("-") and a not in _schema_known_flags]
+    # --format json is accepted as a no-op for cross-command consistency: the
+    # schema/paths/<url> commands all emit JSON envelopes by default, so the
+    # flag is redundant here but agents can pass it without hitting an error.
+    _schema_known_flags = {"-h", "--help", "--human", "--format", "json"}
+    _unknown = [
+        a for a in sys.argv[1:]
+        if a.startswith("-") and a not in _schema_known_flags
+    ]
     if _unknown:
         emit_error(
             "invalid_argument",
@@ -1981,7 +2029,17 @@ def _dispatch_init() -> None:
         _write_token_to_config(token_stripped)
         if human:
             click.secho("✓ Token saved!", fg="green", bold=True)
-        emit_ok({"ready": True, "token_saved": True})
+        emit_ok(
+            {
+                "ready": True,
+                "token_saved": True,
+                "hint": (
+                    "token written to ~/.avocado/config.yaml (overwrites any "
+                    "prior token). Format validated but not API-checked — run "
+                    "`avocado <url>` once to verify it works."
+                ),
+            }
+        )
         return
     run_init_command(human=human)
 

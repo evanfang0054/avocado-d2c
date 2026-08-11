@@ -65,7 +65,12 @@ _SPEC: dict = {
                     "name": ["--depth"],
                     "type": "int",
                     "default": None,
-                    "help": "Max tree depth when fetching",
+                    "help": (
+                        "Max tree depth when fetching from Figma API. "
+                        "Warning: low values (1-5) significantly truncate the tree; "
+                        "Figma designs typically nest 10-20 levels. "
+                        "Use depth >= 20 for full coverage, or omit for unlimited"
+                    ),
                 },
                 {
                     "name": ["--inspect", "--no-inspect"],
@@ -143,31 +148,36 @@ _SPEC: dict = {
                     "name": ["--gap-to-margin", "--no-gap-to-margin"],
                     "type": "flag",
                     "default": False,
-                    "help": "Replace flex gap with per-child margin",
+                    "help": "Replace flex gap with per-child margin "
+                    "(envelope field: mode.passes.gap_to_margin)",
                 },
                 {
                     "name": ["--auto-group-variance", "--no-auto-group-variance"],
                     "type": "flag",
                     "default": False,
-                    "help": "Orient auto_group via variance",
+                    "help": "Orient auto_group via variance "
+                    "(envelope field: mode.passes.auto_group_variance)",
                 },
                 {
                     "name": ["--inherit-promote", "--no-inherit-promote"],
                     "type": "flag",
                     "default": True,
-                    "help": "Lift common inheritable props",
+                    "help": "Lift common inheritable props "
+                    "(envelope field: mode.passes.inherit_promote)",
                 },
                 {
                     "name": ["--strip-defaults", "--no-strip-defaults"],
                     "type": "flag",
                     "default": True,
-                    "help": "Drop CSS props equal to spec default",
+                    "help": "Drop CSS props equal to spec default "
+                    "(envelope field: mode.passes.strip_defaults)",
                 },
                 {
                     "name": ["--unwrap-single", "--no-unwrap-single"],
                     "type": "flag",
                     "default": True,
-                    "help": "Collapse single-child wrappers",
+                    "help": "Collapse single-child wrappers "
+                    "(envelope field: mode.passes.unwrap_single_child)",
                 },
                 {
                     "name": ["--human"],

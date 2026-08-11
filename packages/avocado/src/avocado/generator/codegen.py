@@ -125,12 +125,16 @@ def render_jsx(
             box_sizing_tag=box_sizing_tag,
         )
 
-    # html path (default): preserve original behavior
+    # html path (default): HTML documents are not JS modules, so ES6
+    # import statements are illegal syntax here (browsers render them as
+    # text). Component imports belong only to the react/jsx-module path
+    # above. We intentionally drop `imports` even when non-empty: plugin
+    # name-based recognition may have marked nodes with a component_package,
+    # but in HTML mode those nodes render as plain tags (e.g. `<button>`)
+    # without any module system to import from.
     prefix = ""
     if box_sizing_tag:
         prefix = box_sizing_tag + "\n"
-    if imports:
-        return prefix + imports + "\n" + body
     return prefix + body
 
 
