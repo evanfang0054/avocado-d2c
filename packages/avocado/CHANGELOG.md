@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.6 (2026-08-11)
+
+### Bug Fixes
+
+- **image**: Graceful fallback for unrenderable nested-instance nodes
+  ([`d05422d`](https://github.com/evanfang0054/avocado-d2c/commit/d05422dcc6e97e6d056eabf028c9394cf855bbfb))
+
+
 ## v1.0.5 (2026-08-11)
 
 ### Bug Fixes
