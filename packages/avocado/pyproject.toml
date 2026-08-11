@@ -1,6 +1,6 @@
 [project]
 name = "avocado-d2c"
-version = "0.3.0"
+version = "1.0.0"
 description = "Figma Design to Code (D2C) Python implementation"
 readme = "README.md"
 requires-python = ">=3.11"
