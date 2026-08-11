@@ -164,3 +164,46 @@ def test_default_plugin_dirs_returns_two() -> None:
     assert len(paths) == 2
     # cwd/plugins + ~/.avocado/plugins
     assert any(p.name == "plugins" for p in paths)
+
+
+# ── Plugin.presets_used ──
+
+
+def test_plugin_presets_used_defaults_to_empty() -> None:
+    """Plugin base class defaults presets_used to empty list."""
+
+    class P(Plugin):
+        name = "p"
+
+    p = P()
+    assert p.presets_used == []
+
+
+def test_plugin_presets_used_subclass_override() -> None:
+    """Subclass can declare presets_used (e.g. a name-based recognizer)."""
+
+    class RecognizerPlugin(Plugin):
+        name = "my-recognizer"
+        presets_used = ["my-preset-lib"]
+
+    p = RecognizerPlugin()
+    assert p.presets_used == ["my-preset-lib"]
+
+
+def test_plugin_presets_used_independent_per_instance() -> None:
+    """Each subclass has its own presets_used reference (no shared mutable default)."""
+
+    class A(Plugin):
+        name = "a"
+
+    class B(Plugin):
+        name = "b"
+        presets_used = ["my-preset-lib"]
+
+    a, b = A(), B()
+    assert a.presets_used == []
+    assert b.presets_used == ["my-preset-lib"]
+    # Mutating B's list must not affect A
+    b.presets_used.append("other-lib")
+    assert a.presets_used == []
+    assert b.presets_used == ["my-preset-lib", "other-lib"]

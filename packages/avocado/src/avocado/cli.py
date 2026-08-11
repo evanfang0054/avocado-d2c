@@ -353,7 +353,16 @@ def main(
                 hint="omit -o to get JSX in data.jsx, or write to a real file path",
                 exit_code=2,
             )
-    format_raw = output_format.lower() if output_format else None
+    # format_raw: user's raw --format input (before preset expansion / mapping).
+    # Use ParameterSource to distinguish "user passed --format on CLI" from
+    # "click default value" — the latter happens when --preset indirectly sets
+    # --format (preset expansion below mutates output_format, so checking the
+    # value alone can't tell us the user's intent).
+    from click.core import ParameterSource as _PS
+
+    _ctx_for_fmt = click.get_current_context()
+    _fmt_source = _ctx_for_fmt.get_parameter_source("output_format")
+    format_raw = output_format.lower() if _fmt_source == _PS.COMMANDLINE else None
 
     # FIX: record the start time, compute duration at emit_ok
     import time as _time
@@ -603,6 +612,7 @@ def main(
                     "file_key": ref.file_key,
                     "node_id": ref.node_id,
                     "format": output_format,
+                    "format_raw": format_raw,  # user's raw --format (None if preset/default)
                     "css": css_form,
                     "layout": layout,
                     "component_lib": component_lib,
@@ -1263,7 +1273,13 @@ def main(
                 "(may differ due to unwrap/inherit_promote passes). "
                 "use recognition.rate for overall recognition stats; "
                 "use top_level_rate for accurate per-page recognition; "
-                "use inspect_summary.instance-not-recognized for per-node warnings.",
+                "use inspect_summary.instance-not-recognized for per-node warnings. "
+                "Numerator counts all tree nodes with is_component=True "
+                "(including non-INSTANCE nodes that plugins marked via name "
+                "matching), while denominator only counts INSTANCE nodes — "
+                "so rate can exceed 100% when plugins recognize additional "
+                "components. Check plugins_applied[*].presets_used to see "
+                "which preset library the plugin loaded.",
             }
             # //FIX: without --component-lib, recognition is inevitably 0% —
             # don't blame "abnormally low", guide the user to add --component-lib instead.
@@ -1386,6 +1402,25 @@ def main(
         # Requirement 2: preset_expanded (agents can trace the flags after the preset expands)
         if preset_expanded is not None:
             data["preset_expanded"] = preset_expanded
+        # Report plugins applied + presets they load internally.
+        # ``mode.component_lib`` only reflects the CLI flag; plugins may call
+        # ``load_preset(name)`` inside hooks, which changes the actual output
+        # but is invisible to the envelope. Listing
+        # ``plugins_applied[*].presets_used`` lets agents see the real preset
+        # in use. Plugins opt in by setting ``presets_used`` on the Plugin
+        # subclass (defaults to empty when the plugin doesn't load any preset).
+        if registry.plugins:
+            data["plugins_applied"] = [
+                {"name": p.name, "presets_used": list(p.presets_used)}
+                for p in registry.plugins
+            ]
+            data["mode"]["_plugins_note"] = (
+                "component_lib only reflects the CLI --component-lib flag; "
+                "plugins_applied[*].presets_used lists presets loaded inside "
+                "plugin hooks (invisible to the flag). When presets_used is "
+                "non-empty, the generated code may import components from "
+                "those preset libraries even if component_lib is None."
+            )
         # FIX: explain when beautify=True but beautified=False (tie it to warnings)
         if beautify_flag and not beautified:
             data["mode"]["_beautify_note"] = (

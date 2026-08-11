@@ -63,9 +63,20 @@ HOOK_NAMES = frozenset(
 class Plugin:
     """Base class for avocado plugins.
 
-    Subclass and decorate methods with @hook("name")."""
+    Subclass and decorate methods with @hook("name").
+
+    Attributes:
+        name: Human-readable plugin identifier (shown in envelope ``plugins_applied``).
+        presets_used: Preset names this plugin loads internally (e.g. a plugin
+            that calls ``load_preset("my-lib")`` in a hook should declare
+            ``presets_used = ["my-lib"]``). Reported in envelope
+            ``plugins_applied[*].presets_used`` so agents can see the real
+            preset in use, not just the CLI ``--component-lib`` flag.
+            Defaults to empty (plugin doesn't load any preset).
+    """
 
     name: str = "anonymous"
+    presets_used: list[str] = []
 
     def __repr__(self) -> str:
         return f"<Plugin {self.name!r}>"
