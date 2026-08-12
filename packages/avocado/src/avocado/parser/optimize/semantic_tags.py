@@ -18,10 +18,15 @@ none, it misleads screen readers / SEO):
 - Content tags (h1-h3/p/ul/li/button) use *exact* name matches + structural
   signals (font-size, sibling counts) to stay reliable.
 
-Zero-visual guarantee: tags with UA default styling (h1-h6/p/ul/li/button/
-input/label) are neutralized by a companion CSS reset injected by the
-generator (see ``UA_STYLED_SEMANTIC_TAGS``). Landmark tags need no reset —
-they are display:block with no UA styling.
+Zero-visual guarantee (issue #28 / #30 acceptance): no injected CSS reset.
+h1-h6/p/ul/li/button carry UA default styles (font-size/margin/list-style/
+button chrome) — replacing a <div> with them changes rendering unless a reset
+exists. So:
+- tailwind output: these tags are safe — Tailwind's preflight (@tailwind
+  base) already resets UA styles. Full semanticization.
+- inline/class output: no preflight exists, so only zero-visual tags are
+  emitted (main/section/nav/article/aside/header/footer — pure display:block,
+  rendered identically to div). h1-h6/p/ul/li/button stay div.
 """
 
 from __future__ import annotations
@@ -30,31 +35,11 @@ import re
 
 from avocado.model.tree_node import TreeNode
 
-# Semantic tags that carry UA default styles (font-size/margin/list-style/
-# button chrome). Replacing <div> with these changes rendering unless a CSS
-# reset neutralizes the defaults — the generator injects one when any of
-# these appear in the tree. Landmark tags (header/nav/main/section/footer/
-# aside/article) are display:block with no UA styling and need no reset.
-UA_STYLED_SEMANTIC_TAGS = frozenset(
-    {
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "p",
-        "ul",
-        "li",
-        "button",
-        "input",
-        "label",
-    }
-)
-
 # Figma node name (lowercased) → JSX tag name.
 # Restricted to HTML5 landmark + sectioning tags — these have clear
-# semantic meaning and are routinely named this way in Figma designs.
+# semantic meaning, are routinely named this way in Figma designs, and have
+# NO UA default styling (pure display:block, rendered identically to <div>).
+# They are safe to emit in every CSS form without a reset.
 _SEMANTIC_MAP: dict[str, str] = {
     "header": "header",
     "nav": "nav",
@@ -70,14 +55,16 @@ _SEMANTIC_MAP: dict[str, str] = {
 
 # Exact Figma node names that reliably denote a heading. Mapped to h2/h3 by
 # font-size (no reliable h1 signal from a layer name; the page title is the
-# design's top frame, handled as <main>).
+# design's top frame, handled as <main>). UA-styled → tailwind only.
 _HEADING_NAMES = frozenset({"title", "heading", "headline", "section title"})
 
 # Exact / trailing-token names that denote an interactive button (non-
 # component nodes only — recognized INSTANCE components are already <Button>).
+# UA-styled → tailwind only.
 _BUTTON_NAMES = frozenset({"button", "btn"})
 
-# Exact / trailing-token names that denote a list group.
+# Exact / trailing-token names that denote a list group. UA-styled → tailwind
+# only (list-style + padding-left are reset by preflight).
 _LIST_NAMES = frozenset({"list", "items", "overview", "menu"})
 
 
@@ -169,22 +156,33 @@ def _is_page_root(n: TreeNode) -> bool:
     return n.source_type in {"FRAME", "GROUP"} and not n.is_component and not n.is_img
 
 
-def apply_semantic_tags(root: TreeNode) -> None:
+def apply_semantic_tags(root: TreeNode, css_form: str = "inline") -> None:
     """In-place: rewrite tag_name for nodes that clearly map to a semantic tag.
+
+    Args:
+        root: tree root to rewrite in place.
+        css_form: 'tailwind' | 'inline' | 'class'. Determines whether UA-styled
+            content tags (h1-h6/p/ul/li/button) are emitted — safe under
+            tailwind (preflight resets them) but not under inline/class (no
+            reset would be injected, so they'd render with UA defaults and
+            break zero-visual). Landmark tags are emitted in all forms.
 
     Matches, in order of safety:
       1. <main> for the page root frame (top-level container).
       2. Landmark name keywords (header/nav/main/footer/aside/article/section).
-      3. h2/h3 for exact heading names (Title/Heading/Headline) w/ font-size.
-      4. button for exact 'Button'/'btn' names on non-component nodes.
+      3. h2/h3 for exact heading names (Title/Heading/Headline) w/ font-size
+         (tailwind only).
+      4. button for exact 'Button'/'btn' names on non-component nodes
+         (tailwind only).
       5. ul for list-group containers (name + 3+ same-prefix children); the
-         list children become li.
+         list children become li (tailwind only).
 
     Skips:
     - component nodes (is_component) — don't override <Button>/<Steps>/...
     - image nodes (is_img) — keep <img>
     - text nodes (tag_name == 'span') — keep <span>
     """
+    allow_ua_styled = css_form.lower() == "tailwind"
     is_root = True
     stack = [(root, is_root)]
     while stack:
@@ -202,11 +200,11 @@ def apply_semantic_tags(root: TreeNode) -> None:
             tag = "main"
         elif not is_page_root:
             tag = _match_semantic(n.name or "")
-            if tag is None:
+            if tag is None and allow_ua_styled:
                 tag = _looks_like_heading(n)
-            if tag is None and _looks_like_button(n):
+            if tag is None and allow_ua_styled and _looks_like_button(n):
                 tag = "button"
-            if tag is None:
+            if tag is None and allow_ua_styled:
                 tag = _looks_like_list(n)
         if tag:
             n.tag_name = tag

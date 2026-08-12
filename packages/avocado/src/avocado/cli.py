@@ -828,7 +828,10 @@ def main(
     # risk of breaking earlier passes. Zero visual impact (CSS
     # treats <header> same as <div>), but improves SEO/a11y/JDX
     # readability. Conservative: skips component/img/text nodes.
-    apply_semantic_tags(tree)
+    # UA-styled content tags (h1-h6/p/ul/li/button) are only emitted for
+    # tailwind (preflight resets them); inline/class keep them as div since
+    # no reset would be injected (zero-visual guarantee, #28/#30).
+    apply_semantic_tags(tree, css_form=css_form)
 
     # Plugin loading moved BEFORE map_node (see above). modify_json_schema
     # already ran before unwrap (component nodes are then protected from

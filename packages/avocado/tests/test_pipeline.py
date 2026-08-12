@@ -277,27 +277,16 @@ def test_html_mode_preserves_box_sizing_without_imports() -> None:
     assert "import" not in out
 
 
-# ── semantic reset injection (issue #28) ──
+# ── no injected semantic reset (issue #28/#30: 0 pollution) ──
 
 
-def test_semantic_reset_injected_when_ua_styled_tag_present() -> None:
-    """HTML output injects a UA reset when the tree uses h2 (or similar)."""
-    from avocado.model.tree_node import TreeNode
+def test_no_semantic_reset_injected_in_react_mode() -> None:
+    """React output does not inject a semantic <style> reset (issue #30).
 
-    root = TreeNode(
-        id="1:1",
-        name="Page",
-        source_type="FRAME",
-        tag_name="div",
-        children=[TreeNode(id="1:2", name="Title", source_type="FRAME", tag_name="h2")],
-    )
-    out = render_jsx(root, format="html", box_sizing=None)
-    # semantic reset present (h1-h6/p/ul/li/button/input/label zeroed)
-    assert "h1,h2,h3,h4,h5,h6,p,ul,li,button,input,label" in out
-
-
-def test_semantic_reset_injected_in_react_mode() -> None:
-    """React mode also injects the reset (via the leading <style>)."""
+    UA-styled semantic tags are only emitted for tailwind (preflight resets
+    them); inline/class keep them as div. No <style> reset is ever injected,
+    so the generated code stays clean.
+    """
     from avocado.model.tree_node import TreeNode
 
     root = TreeNode(
@@ -307,20 +296,8 @@ def test_semantic_reset_injected_in_react_mode() -> None:
         tag_name="div",
         children=[TreeNode(id="1:2", name="Item", source_type="FRAME", tag_name="li")],
     )
+    # li would only be set by tailwind semanticization; render_jsx does not
+    # itself know about css_form and must not inject any reset.
     out = render_jsx(root, format="react", box_sizing=None)
-    assert "h1,h2,h3,h4,h5,h6,p,ul,li,button,input,label" in out
-
-
-def test_no_semantic_reset_without_ua_styled_tags() -> None:
-    """Trees with only div/img/component tags get no semantic reset."""
-    from avocado.model.tree_node import TreeNode
-
-    root = TreeNode(
-        id="1:1",
-        name="Page",
-        source_type="FRAME",
-        tag_name="div",
-        children=[TreeNode(id="1:2", name="Box", source_type="RECTANGLE", tag_name="div")],
-    )
-    out = render_jsx(root, format="html", box_sizing=None)
-    assert "h1,h2,h3,h4,h5,h6,p,ul,li,button,input,label" not in out
+    assert "h1,h2,h3" not in out  # no UA-styled reset CSS
+    assert "<style>" not in out  # no injected <style> at all
