@@ -9,7 +9,7 @@ export default function Confirm() {
           gap: "48px",
           width: "1440px",
           height: "1462px",
-          padding: "64px 0px 64px 0px",
+          padding: "64px 0 64px 0",
           backgroundColor: "#faf8f7",
           overflow: "hidden",
       }}>
@@ -81,7 +81,7 @@ export default function Confirm() {
                           fontSize: "16px",
                           fontWeight: 500,
                           textAlign: "center",
-                          letterSpacing: "0px",
+                          letterSpacing: "0",
                           lineHeight: "24px",
                           flexShrink: 0,
                       }}>Back</span>
@@ -146,16 +146,16 @@ export default function Confirm() {
                                       flexDirection: "row",
                                       flexGrow: 1,
                                       height: "8px",
-                                      minWidth: "0px",
-                                      flexBasis: "0px",
+                                      minWidth: "0",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
                                           flexDirection: "column",
                                           flexGrow: 1,
                                           height: "8px",
-                                          minWidth: "0px",
-                                          flexBasis: "0px",
+                                          minWidth: "0",
+                                          flexBasis: "0",
                                       }}>
                                           <div style={{
                                               display: "flex",
@@ -173,16 +173,16 @@ export default function Confirm() {
                                       flexDirection: "row",
                                       flexGrow: 1,
                                       height: "8px",
-                                      minWidth: "0px",
-                                      flexBasis: "0px",
+                                      minWidth: "0",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
                                           flexDirection: "column",
                                           flexGrow: 1,
                                           height: "8px",
-                                          minWidth: "0px",
-                                          flexBasis: "0px",
+                                          minWidth: "0",
+                                          flexBasis: "0",
                                       }}>
                                           <div style={{
                                               display: "flex",
@@ -200,16 +200,16 @@ export default function Confirm() {
                                       flexDirection: "row",
                                       flexGrow: 1,
                                       height: "8px",
-                                      minWidth: "0px",
-                                      flexBasis: "0px",
+                                      minWidth: "0",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
                                           flexDirection: "column",
                                           flexGrow: 1,
                                           height: "8px",
-                                          minWidth: "0px",
-                                          flexBasis: "0px",
+                                          minWidth: "0",
+                                          flexBasis: "0",
                                       }}>
                                           <div style={{
                                               display: "flex",
@@ -227,16 +227,16 @@ export default function Confirm() {
                                       flexDirection: "row",
                                       flexGrow: 1,
                                       height: "8px",
-                                      minWidth: "0px",
-                                      flexBasis: "0px",
+                                      minWidth: "0",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
                                           flexDirection: "column",
                                           flexGrow: 1,
                                           height: "8px",
-                                          minWidth: "0px",
-                                          flexBasis: "0px",
+                                          minWidth: "0",
+                                          flexBasis: "0",
                                       }}>
                                           <div style={{
                                               display: "flex",
@@ -265,7 +265,7 @@ export default function Confirm() {
                                       fontFamily: "Poppins, sans-serif",
                                       fontSize: "14px",
                                       fontWeight: 400,
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "22px",
                                       flexShrink: 0,
                                   }}>Step 3:</span>
@@ -276,7 +276,7 @@ export default function Confirm() {
                                       fontFamily: "Poppins, sans-serif",
                                       fontSize: "14px",
                                       fontWeight: 400,
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "22px",
                                       flexShrink: 0,
                                   }}>Confirm Details</span>
@@ -307,7 +307,7 @@ export default function Confirm() {
                                   fontFamily: "Cabin, sans-serif",
                                   fontSize: "22px",
                                   fontWeight: 500,
-                                  letterSpacing: "0px",
+                                  letterSpacing: "0",
                                   lineHeight: "34px",
                                   flexShrink: 0,
                               }}>Confirm Details</span>
@@ -324,14 +324,14 @@ export default function Confirm() {
                               <span style={{
                                   flexGrow: 1,
                                   height: "22px",
-                                  minWidth: "0px",
+                                  minWidth: "0",
                                   color: "#4b4a4a",
                                   fontFamily: "Poppins, sans-serif",
                                   fontSize: "14px",
                                   fontWeight: 400,
-                                  letterSpacing: "0px",
+                                  letterSpacing: "0",
                                   lineHeight: "22px",
-                                  flexBasis: "0px",
+                                  flexBasis: "0",
                               }}>Verify and confirm all details before submission.</span>
                           </div>
                       </div>
@@ -368,7 +368,7 @@ export default function Confirm() {
                                       fontFamily: "Poppins, sans-serif",
                                       fontSize: "16px",
                                       fontWeight: 500,
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "24px",
                                       flexShrink: 0,
                                   }}>Order Details</span>
@@ -417,9 +417,9 @@ export default function Confirm() {
                                               gap: "4px",
                                               flexGrow: 1,
                                               height: "52px",
-                                              minWidth: "0px",
-                                              padding: "0px 8px 0px 0px",
-                                              flexBasis: "0px",
+                                              minWidth: "0",
+                                              padding: "0 8px 0 0",
+                                              flexBasis: "0",
                                           }}>
                                               <span style={{
                                                   width: "416px",
@@ -428,7 +428,7 @@ export default function Confirm() {
                                                   fontFamily: "Poppins, sans-serif",
                                                   fontSize: "16px",
                                                   fontWeight: 400,
-                                                  letterSpacing: "0px",
+                                                  letterSpacing: "0",
                                                   lineHeight: "24px",
                                                   flexShrink: 0,
                                               }}>Order 1</span>
@@ -444,15 +444,15 @@ export default function Confirm() {
                                                   <span style={{
                                                       flexGrow: 1,
                                                       height: "24px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       color: "#4b4a4a",
                                                       fontFamily: "Poppins, sans-serif",
                                                       fontSize: "16px",
                                                       fontWeight: 400,
-                                                      letterSpacing: "0px",
+                                                      letterSpacing: "0",
                                                       lineHeight: "24px",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>CityA - CityB (XX1234) • 25/12/2026</span>
                                               </div>
                                           </div>
@@ -493,7 +493,7 @@ export default function Confirm() {
                                       fontFamily: "Poppins, sans-serif",
                                       fontSize: "16px",
                                       fontWeight: 500,
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "24px",
                                       flexShrink: 0,
                                   }}>Customers</span>
@@ -534,7 +534,7 @@ export default function Confirm() {
                                           justifyContent: "space-between",
                                           width: "424px",
                                           height: "116px",
-                                          padding: "0px 0px 16px 0px",
+                                          padding: "0 0 16px 0",
                                           borderBottom: "1px solid #cdcbcb",
                                           flexShrink: 0,
                                       }}>
@@ -544,9 +544,9 @@ export default function Confirm() {
                                               gap: "4px",
                                               flexGrow: 1,
                                               height: "100px",
-                                              minWidth: "0px",
-                                              padding: "0px 8px 0px 0px",
-                                              flexBasis: "0px",
+                                              minWidth: "0",
+                                              padding: "0 8px 0 0",
+                                              flexBasis: "0",
                                           }}>
                                               <span style={{
                                                   width: "416px",
@@ -555,7 +555,7 @@ export default function Confirm() {
                                                   fontFamily: "Poppins, sans-serif",
                                                   fontSize: "16px",
                                                   fontWeight: 400,
-                                                  letterSpacing: "0px",
+                                                  letterSpacing: "0",
                                                   lineHeight: "24px",
                                                   flexShrink: 0,
                                               }}>Lead Customer</span>
@@ -571,15 +571,15 @@ export default function Confirm() {
                                                   <span style={{
                                                       flexGrow: 1,
                                                       height: "72px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       color: "#4b4a4a",
                                                       fontFamily: "Poppins, sans-serif",
                                                       fontSize: "16px",
                                                       fontWeight: 400,
-                                                      letterSpacing: "0px",
+                                                      letterSpacing: "0",
                                                       lineHeight: "24px",
                                                       whiteSpace: "pre-line",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>John Doe
             john.doe@example.com
             02012345678</span>
@@ -610,9 +610,9 @@ export default function Confirm() {
                                               gap: "4px",
                                               flexGrow: 1,
                                               height: "52px",
-                                              minWidth: "0px",
-                                              padding: "0px 8px 0px 0px",
-                                              flexBasis: "0px",
+                                              minWidth: "0",
+                                              padding: "0 8px 0 0",
+                                              flexBasis: "0",
                                           }}>
                                               <span style={{
                                                   width: "416px",
@@ -621,7 +621,7 @@ export default function Confirm() {
                                                   fontFamily: "Poppins, sans-serif",
                                                   fontSize: "16px",
                                                   fontWeight: 400,
-                                                  letterSpacing: "0px",
+                                                  letterSpacing: "0",
                                                   lineHeight: "24px",
                                                   flexShrink: 0,
                                               }}>Additional Customers</span>
@@ -637,15 +637,15 @@ export default function Confirm() {
                                                   <span style={{
                                                       flexGrow: 1,
                                                       height: "24px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       color: "#4b4a4a",
                                                       fontFamily: "Poppins, sans-serif",
                                                       fontSize: "16px",
                                                       fontWeight: 400,
-                                                      letterSpacing: "0px",
+                                                      letterSpacing: "0",
                                                       lineHeight: "24px",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>3</span>
                                               </div>
                                           </div>
@@ -703,7 +703,7 @@ export default function Confirm() {
                                           fontFamily: "Poppins, sans-serif",
                                           fontSize: "16px",
                                           fontWeight: 500,
-                                          letterSpacing: "0px",
+                                          letterSpacing: "0",
                                           lineHeight: "24px",
                                           flexShrink: 0,
                                       }}>Available options</span>
@@ -716,7 +716,7 @@ export default function Confirm() {
                                       fontSize: "16px",
                                       fontWeight: 500,
                                       textAlign: "center",
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "24px",
                                       flexShrink: 0,
                                   }}>View all 6</span>
@@ -736,12 +736,12 @@ export default function Confirm() {
                                       gap: "16px",
                                       flexGrow: 1,
                                       height: "206px",
-                                      minWidth: "0px",
+                                      minWidth: "0",
                                       backgroundColor: "#ffffff",
                                       borderRadius: "8px",
                                       boxShadow: "inset 0 0 0 1px #cecccc",
                                       overflow: "hidden",
-                                      flexBasis: "0px",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
@@ -749,7 +749,7 @@ export default function Confirm() {
                                           gap: "16px",
                                           width: "220px",
                                           height: "206px",
-                                          padding: "0px 0px 16px 0px",
+                                          padding: "0 0 16px 0",
                                           flexShrink: 0,
                                       }}>
                                           <img alt="image" src="// TODO: image for figma node 1732:4272" style={{
@@ -765,7 +765,7 @@ export default function Confirm() {
                                               gap: "8px",
                                               width: "220px",
                                               height: "46px",
-                                              padding: "0px 16px 0px 16px",
+                                              padding: "0 16px 0 16px",
                                               flexShrink: 0,
                                           }}>
                                               <div style={{
@@ -782,9 +782,9 @@ export default function Confirm() {
                                                       gap: "12px",
                                                       flexGrow: 1,
                                                       height: "46px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>
                                                       <div style={{
                                                           display: "flex",
@@ -800,7 +800,7 @@ export default function Confirm() {
                                                               fontFamily: "Poppins, sans-serif",
                                                               fontSize: "16px",
                                                               fontWeight: 500,
-                                                              letterSpacing: "0px",
+                                                              letterSpacing: "0",
                                                               lineHeight: "24px",
                                                               flexShrink: 0,
                                                           }}>Sample Option</span>
@@ -820,7 +820,7 @@ export default function Confirm() {
                                                                   fontFamily: "Poppins, sans-serif",
                                                                   fontSize: "14px",
                                                                   fontWeight: 400,
-                                                                  letterSpacing: "0px",
+                                                                  letterSpacing: "0",
                                                                   lineHeight: "22px",
                                                                   flexShrink: 0,
                                                               }}>Area 1</span>
@@ -837,12 +837,12 @@ export default function Confirm() {
                                       gap: "16px",
                                       flexGrow: 1,
                                       height: "206px",
-                                      minWidth: "0px",
+                                      minWidth: "0",
                                       backgroundColor: "#ffffff",
                                       borderRadius: "8px",
                                       boxShadow: "inset 0 0 0 1px #cecccc",
                                       overflow: "hidden",
-                                      flexBasis: "0px",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
@@ -850,7 +850,7 @@ export default function Confirm() {
                                           gap: "16px",
                                           width: "220px",
                                           height: "206px",
-                                          padding: "0px 0px 16px 0px",
+                                          padding: "0 0 16px 0",
                                           flexShrink: 0,
                                       }}>
                                           <img alt="image" src="// TODO: image for figma node 1732:4295" style={{
@@ -866,7 +866,7 @@ export default function Confirm() {
                                               gap: "8px",
                                               width: "220px",
                                               height: "46px",
-                                              padding: "0px 16px 0px 16px",
+                                              padding: "0 16px 0 16px",
                                               flexShrink: 0,
                                           }}>
                                               <div style={{
@@ -883,9 +883,9 @@ export default function Confirm() {
                                                       gap: "12px",
                                                       flexGrow: 1,
                                                       height: "46px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>
                                                       <div style={{
                                                           display: "flex",
@@ -901,7 +901,7 @@ export default function Confirm() {
                                                               fontFamily: "Poppins, sans-serif",
                                                               fontSize: "16px",
                                                               fontWeight: 500,
-                                                              letterSpacing: "0px",
+                                                              letterSpacing: "0",
                                                               lineHeight: "24px",
                                                               flexShrink: 0,
                                                           }}>Sample Option</span>
@@ -921,7 +921,7 @@ export default function Confirm() {
                                                                   fontFamily: "Poppins, sans-serif",
                                                                   fontSize: "14px",
                                                                   fontWeight: 400,
-                                                                  letterSpacing: "0px",
+                                                                  letterSpacing: "0",
                                                                   lineHeight: "22px",
                                                                   flexShrink: 0,
                                                               }}>Area 1</span>
@@ -966,7 +966,7 @@ export default function Confirm() {
                                           fontFamily: "Poppins, sans-serif",
                                           fontSize: "16px",
                                           fontWeight: 500,
-                                          letterSpacing: "0px",
+                                          letterSpacing: "0",
                                           lineHeight: "24px",
                                           flexShrink: 0,
                                       }}>Available options</span>
@@ -979,7 +979,7 @@ export default function Confirm() {
                                       fontSize: "16px",
                                       fontWeight: 500,
                                       textAlign: "center",
-                                      letterSpacing: "0px",
+                                      letterSpacing: "0",
                                       lineHeight: "24px",
                                       flexShrink: 0,
                                   }}>View all 12</span>
@@ -999,13 +999,13 @@ export default function Confirm() {
                                       gap: "16px",
                                       flexGrow: 1,
                                       height: "206px",
-                                      minWidth: "0px",
+                                      minWidth: "0",
                                       backgroundColor: "#ffffff",
                                       borderRadius: "8px",
                                       boxShadow: "inset 0 0 0 1px #cdcbcb",
                                       overflow: "hidden",
                                       alignSelf: "stretch",
-                                      flexBasis: "0px",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
@@ -1013,7 +1013,7 @@ export default function Confirm() {
                                           gap: "16px",
                                           width: "220px",
                                           height: "206px",
-                                          padding: "0px 0px 16px 0px",
+                                          padding: "0 0 16px 0",
                                           flexShrink: 0,
                                       }}>
                                           <img alt="image" src="// TODO: image for figma node I1732:4321;341:1884" style={{
@@ -1029,7 +1029,7 @@ export default function Confirm() {
                                               gap: "8px",
                                               width: "220px",
                                               height: "46px",
-                                              padding: "0px 16px 0px 16px",
+                                              padding: "0 16px 0 16px",
                                               flexShrink: 0,
                                           }}>
                                               <div style={{
@@ -1046,9 +1046,9 @@ export default function Confirm() {
                                                       gap: "12px",
                                                       flexGrow: 1,
                                                       height: "46px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>
                                                       <div style={{
                                                           display: "flex",
@@ -1064,7 +1064,7 @@ export default function Confirm() {
                                                               fontFamily: "Poppins, sans-serif",
                                                               fontSize: "16px",
                                                               fontWeight: 500,
-                                                              letterSpacing: "0px",
+                                                              letterSpacing: "0",
                                                               lineHeight: "24px",
                                                               flexShrink: 0,
                                                           }}>Sample Dining</span>
@@ -1084,7 +1084,7 @@ export default function Confirm() {
                                                                   fontFamily: "Poppins, sans-serif",
                                                                   fontSize: "14px",
                                                                   fontWeight: 400,
-                                                                  letterSpacing: "0px",
+                                                                  letterSpacing: "0",
                                                                   lineHeight: "22px",
                                                                   flexShrink: 0,
                                                               }}>Area 1</span>
@@ -1101,12 +1101,12 @@ export default function Confirm() {
                                       gap: "16px",
                                       flexGrow: 1,
                                       height: "206px",
-                                      minWidth: "0px",
+                                      minWidth: "0",
                                       backgroundColor: "#ffffff",
                                       borderRadius: "8px",
                                       boxShadow: "inset 0 0 0 1px #cecccc",
                                       overflow: "hidden",
-                                      flexBasis: "0px",
+                                      flexBasis: "0",
                                   }}>
                                       <div style={{
                                           display: "flex",
@@ -1114,7 +1114,7 @@ export default function Confirm() {
                                           gap: "16px",
                                           width: "220px",
                                           height: "206px",
-                                          padding: "0px 0px 16px 0px",
+                                          padding: "0 0 16px 0",
                                           flexShrink: 0,
                                       }}>
                                           <img alt="image" src="// TODO: image for figma node 1732:4324" style={{
@@ -1130,7 +1130,7 @@ export default function Confirm() {
                                               gap: "8px",
                                               width: "220px",
                                               height: "46px",
-                                              padding: "0px 16px 0px 16px",
+                                              padding: "0 16px 0 16px",
                                               flexShrink: 0,
                                           }}>
                                               <div style={{
@@ -1147,9 +1147,9 @@ export default function Confirm() {
                                                       gap: "12px",
                                                       flexGrow: 1,
                                                       height: "46px",
-                                                      minWidth: "0px",
+                                                      minWidth: "0",
                                                       alignSelf: "stretch",
-                                                      flexBasis: "0px",
+                                                      flexBasis: "0",
                                                   }}>
                                                       <div style={{
                                                           display: "flex",
@@ -1165,7 +1165,7 @@ export default function Confirm() {
                                                               fontFamily: "Poppins, sans-serif",
                                                               fontSize: "16px",
                                                               fontWeight: 500,
-                                                              letterSpacing: "0px",
+                                                              letterSpacing: "0",
                                                               lineHeight: "24px",
                                                               flexShrink: 0,
                                                           }}>Sample Restaurant</span>
@@ -1185,7 +1185,7 @@ export default function Confirm() {
                                                                   fontFamily: "Poppins, sans-serif",
                                                                   fontSize: "14px",
                                                                   fontWeight: 400,
-                                                                  letterSpacing: "0px",
+                                                                  letterSpacing: "0",
                                                                   lineHeight: "22px",
                                                                   flexShrink: 0,
                                                               }}>Area 1</span>
@@ -1239,7 +1239,7 @@ export default function Confirm() {
                                   fontSize: "16px",
                                   fontWeight: 500,
                                   textAlign: "center",
-                                  letterSpacing: "0px",
+                                  letterSpacing: "0",
                                   lineHeight: "24px",
                                   flexShrink: 0,
                               }}>Continue</span>

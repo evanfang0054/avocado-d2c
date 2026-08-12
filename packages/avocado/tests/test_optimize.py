@@ -7,6 +7,10 @@ from avocado.parser.optimize.auto_group_variance import apply_auto_group_varianc
 from avocado.parser.optimize.gap_to_margin import gap_to_margin
 from avocado.parser.optimize.inherit_promote import promote_inherited_styles
 from avocado.parser.optimize.reround import reround_styles
+from avocado.parser.optimize.semantic_tags import (
+    UA_STYLED_SEMANTIC_TAGS,
+    apply_semantic_tags,
+)
 from avocado.parser.optimize.strip_defaults import strip_default_styles
 from avocado.parser.optimize.unwrap_single_child import unwrap_single_child
 
@@ -310,3 +314,79 @@ def test_auto_group_variance_picks_row_for_spread_x():
     root.children = children
     apply_auto_group_variance(root)
     assert root.style.get("flex-direction") == "row"
+
+
+# ── semantic_tags (issue #28: semantic HTML at zero visual cost) ──
+
+
+def test_semantic_root_becomes_main():
+    """The page root FRAME maps to <main> (zero-visual landmark)."""
+    root = _node("Payment", source_type="FRAME", style={"width": "1440px"})
+    child = _node("body", source_type="FRAME", style={"width": "1168px"})
+    root.children = [child]
+    apply_semantic_tags(root)
+    assert root.tag_name == "main"
+
+
+def test_semantic_heading_by_name_and_font_size():
+    """Exact 'Title' name + font-size → h2/h3 (needs UA reset)."""
+    root = _node("Page", source_type="FRAME")
+    title = _node("Title", source_type="FRAME", style={"font-size": "22px"})
+    small = _node("Heading", source_type="FRAME", style={"font-size": "16px"})
+    root.children = [title, small]
+    apply_semantic_tags(root)
+    assert title.tag_name == "h2"
+    assert small.tag_name == "h3"
+    # Heading tags are UA-styled → must be in the reset set.
+    assert "h2" in UA_STYLED_SEMANTIC_TAGS
+
+
+def test_semantic_heading_requires_font_size():
+    """A node named 'Title' without font-size is left as div (宁少勿错)."""
+    root = _node("Page", source_type="FRAME")
+    title = _node("Title", source_type="FRAME", style={"width": "100px"})
+    root.children = [title]
+    apply_semantic_tags(root)
+    assert title.tag_name == "div"
+
+
+def test_semantic_button_by_name():
+    """Exact 'Button' name on a non-component node → <button>."""
+    root = _node("Page", source_type="FRAME")
+    btn = _node("Button", source_type="FRAME", style={"background-color": "#006b99"})
+    root.children = [btn]
+    apply_semantic_tags(root)
+    assert btn.tag_name == "button"
+
+
+def test_semantic_skips_components_and_images():
+    """Recognized components and images keep their tags."""
+    root = _node("Page", source_type="FRAME")
+    comp = _node("Button", source_type="INSTANCE", is_component=True, tag_name="Button")
+    img = _node("Image", source_type="RECTANGLE", is_img=True, tag_name="img")
+    root.children = [comp, img]
+    apply_semantic_tags(root)
+    assert comp.tag_name == "Button"  # component preserved
+    assert img.tag_name == "img"
+
+
+def test_semantic_list_group_to_ul_li():
+    """A list container with 3+ same-prefix children → <ul> + <li>."""
+    root = _node("Page", source_type="FRAME")
+    overview = _node("Overview", source_type="FRAME")
+    overview.children = [
+        _node(f"Item {i}", source_type="FRAME") for i in range(1, 4)
+    ]
+    root.children = [overview]
+    apply_semantic_tags(root)
+    assert overview.tag_name == "ul"
+    assert all(c.tag_name == "li" for c in overview.children)
+
+
+def test_semantic_text_nodes_kept_as_span():
+    """Text nodes (tag_name == 'span') are left alone."""
+    root = _node("Page", source_type="FRAME")
+    text = _node("Your total", source_type="TEXT", tag_name="span", text_content="Your total")
+    root.children = [text]
+    apply_semantic_tags(root)
+    assert text.tag_name == "span"

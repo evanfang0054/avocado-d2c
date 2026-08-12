@@ -23,6 +23,7 @@ from typing import Literal
 from avocado.generator.css import render_inline_style
 from avocado.generator.react_style import render_react_style
 from avocado.model.tree_node import TreeNode
+from avocado.parser.optimize.semantic_tags import UA_STYLED_SEMANTIC_TAGS
 
 # HTML void elements — content forbidden, no end tag.
 # https://html.spec.whatwg.org/multipage/syntax.html#void-elements
@@ -102,13 +103,21 @@ def render_jsx(
     )
     body = "\n".join(lines) + "\n"
 
-    # Box-sizing reset: a single <style> tag prepended to the output so the
-    # browser-preview path renders with the intended box model.
+    # Leading <style> for the box-sizing reset + semantic reset (issue #28).
+    # The box-sizing part is skipped by cli.py when it equals the browser
+    # default (content-box); the semantic reset is injected whenever the tree
+    # uses a semantic tag that carries UA default styles, so replacing a <div>
+    # with <h1>/<p>/<ul>/<button>/... stays zero-visual.
     # React/JSX mode requires the CSS body wrapped in a string expression
     # `{"..."}` — otherwise `{box-sizing:...}` is parsed as a JSX expression
     # container and the JSX parser chokes on the bare `:` inside.
+    css_reset_parts: list[str] = []
     if box_sizing:
-        css_text = f"*{{box-sizing:{box_sizing}}}"
+        css_reset_parts.append(f"*{{box-sizing:{box_sizing}}}")
+    if _subtree_uses_ua_styled_semantic(root):
+        css_reset_parts.append(_SEMANTIC_RESET_BODY)
+    if css_reset_parts:
+        css_text = " ".join(css_reset_parts)
         if format == "react":
             box_sizing_tag = f'<style>{{"{css_text}"}}</style>'
         else:
@@ -136,6 +145,30 @@ def render_jsx(
     if box_sizing_tag:
         prefix = box_sizing_tag + "\n"
     return prefix + body
+
+
+# Semantic reset (issue #28): neutralizes UA default styles on semantic tags
+# (h1-h6/p/ul/li/button/input/label have font-size/margin/list-style/button
+# chrome defaults). Replacing a <div> with such a tag changes rendering unless
+# the defaults are zeroed — this companion CSS makes the swap zero-visual.
+# Landmark tags are display:block with no UA styling, but folding them in is
+# harmless and keeps the selector uniform.
+_SEMANTIC_RESET_BODY = (
+    "h1,h2,h3,h4,h5,h6,p,ul,li,button,input,label,header,main,section,"
+    "footer,nav,aside,article{margin:0;padding:0;font:inherit;"
+    "line-height:inherit;color:inherit;list-style:none;border:0;background:none}"
+)
+
+
+def _subtree_uses_ua_styled_semantic(root: TreeNode) -> bool:
+    """True if the tree contains any semantic tag that needs a CSS reset."""
+    stack = [root]
+    while stack:
+        n = stack.pop()
+        if n.tag_name in UA_STYLED_SEMANTIC_TAGS:
+            return True
+        stack.extend(n.children or [])
+    return False
 
 
 def _collect_imports(root: TreeNode) -> str:
