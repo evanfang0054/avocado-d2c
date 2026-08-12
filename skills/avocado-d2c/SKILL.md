@@ -1,6 +1,6 @@
 ---
 name: avocado-d2c
-description: Use when an agent needs to generate JSX/CSS from a Figma URL using the avocado CLI — covers `avocado <url>` flag selection, JSON envelope parsing, error code handling, cache/offline modes, output format combinations (flex/absolute × react/html × inline/tailwind/class), component library presets, CSS variables, and debugging with --no-beautify. Triggers on "convert Figma", "generate JSX", "run avocado", "d2c", "Figma to code", "avocado flags", "FIGMA_TOKEN", and when handed a figma.com URL. Does NOT cover path/config customization (avocado-path-config) or antd.yaml maintenance (avocado-component-preset).
+description: Use when an agent needs to generate JSX/CSS from a Figma URL using the avocado CLI — covers `avocado <url>` flag selection, JSON envelope parsing, error code handling, cache/offline modes, output format combinations (flex/absolute × react/html × inline/tailwind/class), component library presets, CSS variables, and debugging with --no-beautify. Triggers on "convert Figma", "generate JSX", "run avocado", "d2c", "Figma to code", "avocado flags", "FIGMA_TOKEN", and when handed a figma.com URL. Does NOT cover path/config customization (avocado-path-config) or antd.yaml/plugin maintenance (avocado-component-adapter).
 ---
 
 # avocado-d2c
@@ -34,7 +34,7 @@ echo "figma_token: figd_xxxxx" > ~/.avocado/config.yaml
 
 **不触发**（路由到对应 skill）：
 - 改 preset / var-map / ~/.avocado 配置 → `avocado-path-config`
-- 改 antd.yaml / 加组件映射 → `avocado-component-preset`
+- 改 antd.yaml / 加组件映射 / 写插件 → `avocado-component-adapter`
 
 ## 标准调用流程
 
@@ -350,7 +350,7 @@ agent 解析时只读 stdout，stderr 仅用于人类查看 / debug。
 ## 相关 skill
 
 - [avocado-path-config](../avocado-path-config/SKILL.md) — 改配置 / preset / var-map
-- [avocado-component-preset](../avocado-component-preset/SKILL.md) — 改组件库预设
+- [avocado-component-adapter](../avocado-component-adapter/SKILL.md) — 改组件库 preset / 写配套插件
 
 ## 真相源
 

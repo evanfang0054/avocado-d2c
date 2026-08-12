@@ -1,11 +1,11 @@
 ---
-name: avocado-component-preset
-description: Use when an agent needs to edit or extend a component library preset YAML (antd.yaml etc.) — covers the ComponentMapping schema (9 fields: name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Triggers on "加组件", "antd.yaml", "preset 改", "组件识别", "INSTANCE 识别不到", "leaf 字段", "variant", "dynamicProps", "extractor", "componentId", "Figma 组件映射". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff.
+name: avocado-component-adapter
+description: Use when an agent needs to adapt a component library to avocado — editing/extending preset YAML (antd.yaml etc.) AND writing the companion plugins (~/.avocado/plugins/*.py) that make presets work. Covers the ComponentMapping schema (9 fields: name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Also covers the Plugin base class contract (name/presets_used), the 6 hooks (modify_json_schema/modify_props/modify_style/modify_css_var/generate_template/inspect_draft) with signatures and return conventions, the name-recognizer template for recognizing non-INSTANCE layers by Figma name, and why modify_json_schema runs before unwrap (component protection). Triggers on "加组件", "antd.yaml", "preset 改", "组件识别", "INSTANCE 识别不到", "leaf 字段", "variant", "dynamicProps", "extractor", "componentId", "Figma 组件映射", "写插件", "plugin", "hook", "name-recognizer". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff.
 ---
 
-# avocado-component-preset
+# avocado-component-adapter
 
-组件库预设（antd.yaml 等）维护手册。这是 avocado 项目里约束最密集的 YAML 文件——错一个字段会让整个 React 树白屏。
+组件库适配手册：preset 映射数据（antd.yaml 等）+ 配套插件（识别/提取逻辑）。preset 是 avocado 项目里约束最密集的 YAML 文件——错一个字段会让整个 React 树白屏。
 
 ## 何时触发
 
@@ -345,6 +345,120 @@ avocado <url> --component-lib <name> --dry-run  # 验证 preset 可解析 + extr
 3. 验证 `recognize()` 检查 `m.dynamic_props` 后允许 name 命中
 4. **不要直接删 blockNameMatch 标记**（缺 extractor 的组件白屏）
 
+## 插件编写（preset 的配套逻辑层）
+
+preset 只是**数据**（组件映射表）；需要额外逻辑时写插件（如按层名识别非 INSTANCE 节点、modify_style 补样式、inspect_draft 加检查）。核心包不内置任何 extractor/recognizer（开源剥离后都是 migration asset），适配自己的组件库基本都要写插件——**不用深入 d2c 源码**，按本节约定即可。
+
+### 发现与注册
+
+插件是 `~/.avocado/plugins/*.py`（或 `./plugins/*.py` 项目级）的普通 Python 文件，`build_registry()` 自动发现。一个文件两种注册方式（二选一）：
+
+```python
+# 方式 1：模块级 plugin() 函数（优先，显式）
+def plugin() -> Plugin:
+    return MyPlugin()
+
+# 方式 2：Plugin 子类扫描（fallback，文件里任意 Plugin 子类都会被实例化）
+class MyPlugin(Plugin):
+    ...
+```
+
+**加载失败只打 stderr warning，不阻断主流程**（`discover_plugins` 的 try/except）。
+
+### Plugin 基类契约（plugins/base.py）
+
+```python
+from avocado.plugins.base import Plugin, hook
+
+class MyPlugin(Plugin):
+    name = "my-plugin"              # 必填，envelope plugins_applied[*].name 上报
+    presets_used = ["atom"]         # 插件内部 load_preset 的 preset 名（供 envelope 上报真实 preset）
+
+    @hook("modify_style")
+    def add_unit(self, node, style):
+        # node: TreeNode；style: dict
+        return style                # ← 必须返回（modify_* 是"返回新 target"约定）
+```
+
+### 6 个 hook（签名 + 返回约定）
+
+| hook | 签名 | 返回 | 运行时机 |
+|---|---|---|---|
+| `modify_json_schema` | `(_, root) -> root`（cli.py 以 `call("modify_json_schema", None, tree)` 两参调用，handler 形如 `(self, _ignored, root)`） | 新 root | **unwrap 之前**（组件先标记 → unwrap 保护） |
+| `modify_props` | `(node, props) -> props` | 新 props | 渲染时逐节点 |
+| `modify_style` | `(node, style) -> style` | 新 style | 渲染时逐节点 |
+| `modify_css_var` | `(vars) -> vars` | 新 vars | CSS 变量表 |
+| `generate_template` | `(root, code) -> code` | 新 JSX 字符串 | 最后 |
+| `inspect_draft` | `(root) -> list[dict]` | 附加 warning 列表 | inspect 阶段 |
+
+### 完整模板：name-recognizer（按层名识别非 INSTANCE 节点）
+
+主管道只识别 INSTANCE；设计师把普通图层（FRAME/RECTANGLE/TEXT）忘了转组件时，用本插件补识别（atom 的 `~/.avocado/plugins/atom_recognizer.py` 即此模板）：
+
+```python
+from avocado.model.tree_node import TreeNode
+from avocado.parser.component import ComponentMapping, load_preset
+from avocado.plugins.base import Plugin, hook
+
+PRESET = "atom"  # 用哪个 preset 的 name 索引
+
+class NameRecognizerPlugin(Plugin):
+    name = "name-recognizer"
+    presets_used = [PRESET]
+
+    @hook("modify_json_schema")
+    def recognize(self, _ignored, root: TreeNode) -> TreeNode:
+        try:
+            index = {}
+            for m in load_preset(PRESET):
+                if not m.name:
+                    continue
+                # 白屏保护：无 extractor 的 blockNameMatch 组件禁止 name 命中
+                if m.block_name_match and not m.dynamic_props:
+                    continue
+                index[m.name.lower().strip()] = m
+        except FileNotFoundError:
+            return root  # preset 缺失 → no-op，不影响主流程
+        stack = [root]
+        while stack:
+            n = stack.pop()
+            if not n.is_component and not n.is_img:   # 不覆盖管道已识别的
+                m = index.get((n.name or "").lower().strip())
+                if m:
+                    n.tag_name, n.is_component, n.component_package = m.component, True, m.package
+                    for k, v in m.props.items():
+                        n.props.setdefault(k, v)
+            stack.extend(n.children)
+        return root
+```
+
+**为什么 modify_json_schema 在 unwrap 前**：unwrap_single_child 会合并单子 wrapper；若 wrapper 层名匹配 preset 组件（如 "Body"→Text），unwrap 会把组件合并掉。`modify_json_schema` 先标记 `is_component` → unwrap 的 `is_component` 保护自动跳过它（Text 5→4 回归就是顺序错误导致的）。
+
+### extractor（被 preset `dynamicProps.extractor` 引用）
+
+```python
+from avocado.parser.component_extractors import register_extractor
+
+def steps_items(scene, path) -> dict:
+    # scene: SceneNode；path: Figma 路径（"container > top > title" 或 __ROOT__）
+    # 失败直接 raise 或返回 {} 都行——run_extractor 静默返回 {}
+    return {"items": [...]}
+
+register_extractor("steps_items", steps_items)  # import 时注册（模块顶层）
+```
+
+- 签名：`fn(scene: SceneNode, path: str | None) -> dict`
+- **静默失败是合法降级**：返回 `{}` → 组件不带 items 渲染，不崩流程；`apply_component` 会记 `extractor-empty` inspect
+- **覆盖同名 extractor 会打 stderr warning**（冲突可发现）
+
+### 关键坑
+
+1. **hook 必须返回 target**（modify_* / generate_template），否则链式调用吞掉前一个插件的修改
+2. **插件 print 会被重定向到 stderr**（stdout 必须是单一 JSON envelope）——调试信息不会破坏契约
+3. **presets_used 必须声明**，否则 envelope 看不到真实 preset（agent 以为没加载组件库）
+4. **静默失败是设计**：extractor 失败、preset 缺失、插件加载失败都不阻断主流程
+5. **同 hook 多插件 = 最后一个注册生效**（KISS：冲突由用户修插件，不做合并策略）
+
 ## 常见 agent 错误
 
 1. **给 Button 加 leaf** → children 是 button 文字，清了就没 label
@@ -365,7 +479,9 @@ avocado <url> --component-lib <name> --dry-run  # 验证 preset 可解析 + extr
 - ComponentMapping dataclass：`packages/avocado/src/avocado/parser/component.py`
 - blockNameMatch + leaf/leafExtras 字段 + variantProperties/variants/dynamicProps：`packages/avocado/src/avocado/parser/component.py`
 - extractor registry（register_extractor / run_extractor）：`packages/avocado/src/avocado/parser/component_extractors.py`
+- **插件系统**（Plugin 基类 / hook 装饰器 / 6 hooks / discovery）：`packages/avocado/src/avocado/plugins/base.py`
 - 内置示例 preset（antd，18 entry）：`packages/avocado/src/avocado/_bundled/presets/antd.yaml`
 - 用户自建 preset/extractor 插件：`~/.avocado/presets/` + `~/.avocado/plugins/`（见 `docs/preset-guide.md`）
+- **name-recognizer 插件实例**：`~/.avocado/plugins/atom_recognizer.py`（+ `atom_extractors.py`）
 - 测试：`packages/avocado/tests/test_component_*.py` + `test_preset_coverage.py` + `test_preset_schema.py`
 - leaf 字段 + Button alias：`docs/preset-guide.md`（leaf / componentId alias 章节）+ 根 `CLAUDE.md` 关键约束第 6 条（blockNameMatch 白屏保护）
