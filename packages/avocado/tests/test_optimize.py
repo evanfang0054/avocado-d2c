@@ -149,9 +149,40 @@ def test_unwrap_blocked_by_visual_style():
 
 def test_unwrap_blocked_by_absolute_in_subtree():
     inner = _node("inner", source_type="RECTANGLE", props={"layoutPositioning": "ABSOLUTE"})
+    wrapper = _node(
+        "wrap",
+        source_type="FRAME",
+        style={"position": "relative"},
+        children=[inner],
+    )
+    out = unwrap_single_child(wrapper)
+    # Positioned wrapper participates in absolute containing-block resolution
+    # → kept.
+    assert out is wrapper
+
+
+def test_unwrap_static_wrapper_with_absolute_subtree():
+    """A static (non-positioned) wrapper does not affect absolute descendants'
+    containing block — unwrapping it is safe (issue #26 flat-nesting)."""
+    inner = _node("inner", source_type="RECTANGLE", props={"layoutPositioning": "ABSOLUTE"})
     wrapper = _node("wrap", source_type="FRAME", children=[inner])
     out = unwrap_single_child(wrapper)
-    # Absolute context preserved → wrapper retained.
+    assert out is not wrapper
+    assert out.source_type == "RECTANGLE"
+    assert out.props.get("layoutPositioning") == "ABSOLUTE"
+
+
+def test_unwrap_blocked_by_style_positioned_wrapper():
+    """Positioned wrapper (style-side `position: absolute`) with an absolute
+    child must be kept — unwrapping would change the containing block."""
+    inner = _node("inner", source_type="RECTANGLE", style={"position": "absolute"})
+    wrapper = _node(
+        "wrap",
+        source_type="FRAME",
+        style={"position": "relative"},
+        children=[inner],
+    )
+    out = unwrap_single_child(wrapper)
     assert out is wrapper
 
 
