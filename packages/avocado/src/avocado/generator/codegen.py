@@ -270,6 +270,15 @@ def _render_node(
     # FIX: in HTML mode className → class (browsers only understand class; the Tailwind CDN relies entirely on this)
     # React mode keeps className (React component convention)
     props_copy = dict(node.props)
+    # Merge a preset-provided `style` into the computed style instead of
+    # emitting a second `style=` attribute (duplicate JSX props are illegal
+    # and would fail to compile). A preset may set `props.style` to override
+    # a component's library default (e.g. `margin: "0"`); the preset value
+    # wins on conflicting keys (the user explicitly configured it), and the
+    # rest of the computed style is preserved.
+    preset_style = props_copy.pop("style", None)
+    if isinstance(preset_style, dict):
+        node.style.update(preset_style)
     if not react and "className" in props_copy:
         props_copy["class"] = props_copy.pop("className")
     # FIX: img tags must have an alt attribute (WCAG a11y standard).
