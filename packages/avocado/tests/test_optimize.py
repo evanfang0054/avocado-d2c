@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from avocado.model.tree_node import TreeNode
 from avocado.parser.optimize.auto_group_variance import apply_auto_group_variance
+from avocado.parser.optimize.component_reset import apply_component_style_reset
 from avocado.parser.optimize.gap_to_margin import gap_to_margin
 from avocado.parser.optimize.inherit_promote import promote_inherited_styles
 from avocado.parser.optimize.reround import reround_styles
@@ -405,3 +406,30 @@ def test_semantic_text_nodes_kept_as_span():
     root.children = [text]
     apply_semantic_tags(root, css_form="tailwind")
     assert text.tag_name == "span"
+
+
+# ── component style reset (issue #37: library default margin) ──
+
+
+def test_component_reset_adds_margin_zero_when_absent():
+    """Component without a Figma margin gets margin: 0 (zero the library default)."""
+    comp = _node("Divider", source_type="INSTANCE", is_component=True,
+                 style={"width": "327px", "height": "0px"})
+    apply_component_style_reset(comp)
+    assert comp.style.get("margin") == "0"
+
+
+def test_component_reset_keeps_explicit_margin():
+    """Component with an explicit Figma margin keeps it."""
+    comp = _node("Button", source_type="INSTANCE", is_component=True,
+                 style={"margin-right": "16px", "width": "32px"})
+    apply_component_style_reset(comp)
+    assert comp.style.get("margin") is None
+    assert comp.style.get("margin-right") == "16px"
+
+
+def test_component_reset_ignores_plain_nodes():
+    """Non-component nodes are untouched."""
+    node = _node("Box", source_type="FRAME", style={"width": "100px"})
+    apply_component_style_reset(node)
+    assert "margin" not in node.style

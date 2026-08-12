@@ -15,6 +15,7 @@ Passes:
 """
 
 from avocado.parser.optimize.auto_group_variance import apply_auto_group_variance
+from avocado.parser.optimize.component_reset import apply_component_style_reset
 from avocado.parser.optimize.gap_to_margin import gap_to_margin
 from avocado.parser.optimize.inherit_promote import promote_inherited_styles
 from avocado.parser.optimize.reround import reround_class_map, reround_styles
@@ -24,6 +25,7 @@ from avocado.parser.optimize.unwrap_single_child import unwrap_single_child
 
 __all__ = [
     "apply_auto_group_variance",
+    "apply_component_style_reset",
     "apply_semantic_tags",
     "gap_to_margin",
     "promote_inherited_styles",

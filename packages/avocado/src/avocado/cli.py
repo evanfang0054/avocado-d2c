@@ -1026,6 +1026,13 @@ def main(
     # the return value is intentionally discarded (call sites use tree.inspect).
     run_all_inspect_rules(tree)
 
+    # Component style reset: zero the library's default margin on component
+    # nodes that have none in the Figma data, so rendering is Figma-driven
+    # (a component's css-in-js default margin otherwise shifts layout, #37).
+    from avocado.parser.optimize.component_reset import apply_component_style_reset
+
+    apply_component_style_reset(tree)
+
     # Convert to Tailwind className form if requested.
     # css_form reflects the user's --css choice (defaults to tailwind).
     if css_form.lower() == "tailwind":
