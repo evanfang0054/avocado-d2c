@@ -412,6 +412,28 @@ avocado <url> --component-lib <name> --dry-run  # 不调 API，验证 preset 可
 
 加 preset entry 后，用 d2c 重新生成 JSX 并在浏览器里对一下 Figma 原稿，确认视觉无回归（`component: ''` 模式零副作用，DOM 不变）。
 
+### 用 --trace-adapter 看匹配链路（过程调试）
+
+上面三招是**宏观/回归**验证。要回答"**为什么**这个组件没被识别""extractor 到底提取了什么"，用 `--trace-adapter`（opt-in，默认关闭零影响）：
+
+```bash
+# 只看 preset 匹配链路：每个 INSTANCE 的命中/未命中原因
+avocado <url> --components mylib.yaml --trace-adapter=preset --summary 2>/dev/null | python3 -c "
+import json, sys
+t = json.load(sys.stdin)['data']['trace']['preset_matches']
+print('matched:', t['matched'], '/ unmatched:', t['unmatched'])
+for u in t['unmatched_details'][:5]:
+    print(f\"  {u['node_name']}: {u['skipped_by']} — {u['reason']}\")
+"
+# → skipped_by 说明原因：component_id_not_in_preset / name_no_match /
+#   block_name_match_skip（name 命中但白屏保护跳过）/ variant_downgrade
+
+# extractor 输出 / 插件 hook 统计
+avocado <url> --components mylib.yaml --trace-adapter=extractor,hook --summary
+```
+
+**适配闭环**：看 unmatched 原因 → 改 preset（补 compId alias / 改 name / 加 extractor）→ 重跑看 `matched_samples.matched_by` 确认命中 → 核对 extractor sample / 插件影响节点 → 不带 trace 做正式回归。
+
 ---
 
 ## 完整示例

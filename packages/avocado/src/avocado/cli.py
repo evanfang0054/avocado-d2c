@@ -72,6 +72,61 @@ def _human_error(msg: str, hint: str | None = None, exit_code: int = 2) -> None:
     sys.exit(exit_code)
 
 
+def _normalize_trace_adapter_argv(argv: list[str]) -> list[str]:
+    """Rewrite bare `--trace-adapter` to `--trace-adapter=__all__`.
+
+    A click option cannot accept both a bare flag and an optional value, so
+    cli() normalizes the bare form (meaning "enable all modules") before main
+    parses argv. Only rewritten when the flag is NOT followed by a value token
+    (next token starts with `-`, or it is the last token) — so the click
+    space-separated form `--trace-adapter preset` keeps its value.
+    """
+    out = list(argv)
+    for i, a in enumerate(out):
+        if a == "--trace-adapter":
+            nxt = out[i + 1] if i + 1 < len(out) else None
+            if nxt is None or nxt.startswith("-"):
+                out[i] = "--trace-adapter=__all__"
+    return out
+
+
+def _build_trace_data() -> dict:
+    """Aggregate collected trace records into the data.trace envelope shape.
+
+    Deterministic: all arrays sorted by stable keys; matched_samples capped at
+    10. Only enabled modules appear (subset filtering). Returns {} when trace
+    is disabled so callers can omit the key entirely.
+    """
+    from avocado.parser.trace import enabled_modules, records
+
+    modules = enabled_modules()
+    if not modules:
+        return {}
+    data: dict = {}
+    if "preset" in modules:
+        recs = records("preset_matches")
+        matched = [r for r in recs if "matched_by" in r]
+        unmatched = [r for r in recs if "skipped_by" in r]
+        data["preset_matches"] = {
+            "total": len(recs),
+            "matched": len(matched),
+            "unmatched": len(unmatched),
+            "unmatched_details": sorted(unmatched, key=lambda r: r.get("node_id", "")),
+            "matched_samples": sorted(matched, key=lambda r: r.get("node_id", ""))[:10],
+        }
+    if "extractor" in modules:
+        data["extractor_outputs"] = sorted(
+            records("extractor_outputs"),
+            key=lambda r: (r.get("component", ""), r.get("extractor", "")),
+        )
+    if "hook" in modules:
+        data["plugin_hooks"] = sorted(
+            records("plugin_hooks"),
+            key=lambda r: (r.get("plugin", ""), r.get("hook", "")),
+        )
+    return data
+
+
 @click.command()
 @click.argument(
     "url",
@@ -295,6 +350,14 @@ def _human_error(msg: str, hint: str | None = None, exit_code: int = 2) -> None:
     help="Add preview-centering styles to HTML output (gray bg + centered + shadow + rounded)."
     "On by default with the designer preset; off by default for plain --format html.",
 )
+@click.option(
+    "--trace-adapter",
+    "trace_adapter",
+    default=None,
+    help="Opt-in adapter debug tracing. Bare flag enables all modules; "
+    "comma-separated subset filters (preset/extractor/hook). "
+    "Adds data.trace to the envelope: preset match details, extractor outputs, plugin hook stats.",
+)
 def main(
     url: str,
     output: Path | None,
@@ -325,6 +388,7 @@ def main(
     preset: str | None = None,
     html_fragment: bool = False,
     preview_centered: bool = False,
+    trace_adapter: str | None = None,
 ) -> None:
     """Convert a Figma node URL to JSX code.
 
@@ -341,6 +405,49 @@ def main(
     """
     # //FIX: pass the warnings array through to the envelope (agents can see it)
     warnings: list[str] = []
+
+    # FIX: --trace-adapter opt-in debug tracing (adapter authoring aid).
+    # reset() runs unconditionally at run start — it must not leak state from
+    # a previous run in the same process (CliRunner tests / embedding), even
+    # when this run does not pass --trace-adapter.
+    from avocado.parser.trace import enable, reset
+
+    reset()
+    if trace_adapter is not None:
+        if trace_adapter == "__all__":
+            modules = {"preset", "extractor", "hook"}
+        else:
+            modules = {m.strip().lower() for m in trace_adapter.split(",") if m.strip()}
+            if not modules:
+                if human:
+                    _human_error(
+                        "--trace-adapter value is empty; valid: preset, extractor, hook (or bare flag for all)",
+                        "e.g. --trace-adapter=preset or --trace-adapter",
+                        exit_code=2,
+                    )
+                emit_error(
+                    "invalid_argument",
+                    "--trace-adapter value is empty; valid: preset, extractor, hook (or bare flag for all)",
+                    hint="e.g. --trace-adapter=preset or --trace-adapter",
+                    exit_code=2,
+                )
+            invalid = modules - {"preset", "extractor", "hook"}
+            if invalid:
+                if human:
+                    _human_error(
+                        f"unknown --trace-adapter value(s) {sorted(invalid)}; "
+                        "valid: preset, extractor, hook (or __all__)",
+                        "e.g. --trace-adapter=preset or --trace-adapter=preset,extractor, or bare --trace-adapter",
+                        exit_code=2,
+                    )
+                emit_error(
+                    "invalid_argument",
+                    f"unknown --trace-adapter value(s) {sorted(invalid)}; "
+                    "valid: preset, extractor, hook (or __all__)",
+                    hint="e.g. --trace-adapter=preset or --trace-adapter=preset,extractor, or bare --trace-adapter",
+                    exit_code=2,
+                )
+        enable(modules)
 
     # FIX: forbid -o /dev/stdout (JSX + envelope both writing stdout breaks the JSON contract)
     # Also forbid /dev/null & /dev/zero: they accept writes but you can never
@@ -1568,6 +1675,10 @@ def main(
             _ver = "unknown"
         data["name"] = "avocado"
         data["version"] = _ver
+        # FIX: --trace-adapter output (adapter debug details, opt-in)
+        _trace = _build_trace_data()
+        if _trace:
+            data["trace"] = _trace
         emit_ok(data)
 
 
@@ -1607,6 +1718,8 @@ def cli() -> None:
         anything else            → main()
     """
     # sys.argv[0] is the program name (avocado), [1] is the first user token
+    # FIX: normalize bare --trace-adapter (enable-all form) before click parses
+    sys.argv[1:] = _normalize_trace_adapter_argv(sys.argv[1:])
     first = sys.argv[1] if len(sys.argv) > 1 else None
     if first is None:
         # FIX: running bare with no args returns a command-list envelope (ok:true),
