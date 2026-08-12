@@ -162,18 +162,18 @@ def test_font_family_maps_to_arbitrary_value() -> None:
     """font-family → font-[Name] arbitrary value."""
     classes, leftover = style_to_tailwind(
         {
-            "font-family": "Poppins",
+            "font-family": "Inter",
         }
     )
-    assert "font-[Poppins]" in classes
+    assert "font-[Inter]" in classes
     assert leftover == {}
 
 
 def test_font_family_with_fallback_maps() -> None:
-    """font-family 'Poppins, sans-serif' → font-[Poppins,_sans-serif]."""
-    classes, _ = style_to_tailwind({"font-family": "Poppins, sans-serif"})
+    """font-family 'Inter, sans-serif' → font-[Inter,_sans-serif]."""
+    classes, _ = style_to_tailwind({"font-family": "Inter, sans-serif"})
     # Tailwind arbitrary value uses _ for space
-    assert "font-[Poppins,_sans-serif]" in classes
+    assert "font-[Inter,_sans-serif]" in classes
 
 
 def test_dedup_classes() -> None:

@@ -49,13 +49,15 @@ def _tag_for(scene: SceneNode) -> str:
     return "div"
 
 
-# Fonts that map to specific OS system stacks; Figma often records "SF Pro" /
-# "SF Pro Display" / "SF Pro Text" for Apple-system text — without a fallback
-# chain Chrome headless can't resolve them, falling back to generic sans with
-# different metrics. Map known-to-system stacks + always append generic family.
+# Figma sometimes records OS-specific font names that Chrome headless cannot
+# resolve without a fallback chain, so it falls back to generic sans with
+# different metrics. Mapping known names to OS stacks was considered — see the
+# note below.
 _FONT_SYSTEM_MAP = {
-    # Intentionally empty: remapping "SF Pro" → -apple-system makes things WORSE
-    # on macOS Chrome (resolves to .SF NS, not real SF Pro). Keep Figma's name.
+    # Intentionally empty: remapping known OS font names to their system
+    # stack makes things WORSE on macOS Chrome (the stack resolves to a
+    # different face with different metrics than the real font). Keep
+    # Figma's name verbatim.
 }
 
 
@@ -197,12 +199,11 @@ def _text_style(scene: SceneNode) -> dict[str, str | float]:
             break
 
     if ts.font_family:
-        # Quote multi-word family names + add sans-serif generic fallback.
-        # We do NOT remap "SF Pro" → -apple-system: tests show that on macOS
-        # Chrome, -apple-system resolves to .SF NS (system UI font, ~Helvetica
-        # metrics) which is FURTHER from Figma's real SF Pro rendering than
-        # the bare "SF Pro" name (which Chrome can resolve via the OS font
-        # registry when SF Pro is installed). Keep the original name verbatim.
+        # Quote multi-word family names + add a sans-serif generic fallback.
+        # We do NOT remap known OS font names to their system stack: tests
+        # show the stack resolves to a different face with different metrics
+        # than the original name (which the browser can resolve via the OS
+        # font registry when installed). Keep the original name verbatim.
         fam = ts.font_family.strip()
         if " " in fam or fam.lower() not in ("serif", "sans-serif", "monospace"):
             # Quote if multi-word or not a generic family keyword.

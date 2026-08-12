@@ -73,7 +73,7 @@ def test_format_px_value_for_non_unitless() -> None:
 
 
 def test_format_named_value() -> None:
-    assert _format_value("fontFamily", "Poppins") == '"Poppins"'
+    assert _format_value("fontFamily", "Inter") == '"Inter"'
     assert _format_value("textAlign", "center") == '"center"'
     assert _format_value("display", "flex") == '"flex"'
 

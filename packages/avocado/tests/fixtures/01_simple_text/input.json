@@ -90,8 +90,8 @@
     0
   ],
   "style": {
-    "fontFamily": "Poppins",
-    "fontPostScriptName": "Poppins-Medium",
+    "fontFamily": "Inter",
+    "fontPostScriptName": "Inter-Medium",
     "fontStyle": "Medium",
     "fontWeight": 500,
     "textAutoResize": "WIDTH_AND_HEIGHT",

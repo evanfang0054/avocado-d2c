@@ -45,21 +45,21 @@ def test_inherit_promote_skips_when_values_differ():
 def test_inherit_promote_majority_vote():
     """Only font-family uses majority vote.
 
-    3 leaves with Poppins + 1 with Cabin → root gets Poppins (78% majority),
-    Cabin leaf keeps its override.
+    3 leaves with Inter + 1 with Roboto → root gets Inter (75% majority),
+    Roboto leaf keeps its override.
     """
     root = _node(style={})
-    p1 = _node("a", source_type="TEXT", style={"font-family": "Poppins"})
-    p2 = _node("b", source_type="TEXT", style={"font-family": "Poppins"})
-    p3 = _node("c", source_type="TEXT", style={"font-family": "Poppins"})
-    other = _node("d", source_type="TEXT", style={"font-family": "Cabin"})
+    p1 = _node("a", source_type="TEXT", style={"font-family": "Inter"})
+    p2 = _node("b", source_type="TEXT", style={"font-family": "Inter"})
+    p3 = _node("c", source_type="TEXT", style={"font-family": "Inter"})
+    other = _node("d", source_type="TEXT", style={"font-family": "Roboto"})
     root.children = [p1, p2, p3, other]
     promote_inherited_styles(root)
-    assert root.style.get("font-family") == "Poppins"
+    assert root.style.get("font-family") == "Inter"
     assert "font-family" not in p1.style
     assert "font-family" not in p2.style
     assert "font-family" not in p3.style
-    assert other.style.get("font-family") == "Cabin"  # minority override kept
+    assert other.style.get("font-family") == "Roboto"  # minority override kept
 
 
 def test_inherit_promote_non_font_props_require_unanimous():
@@ -82,16 +82,16 @@ def test_inherit_promote_non_font_props_require_unanimous():
 def test_inherit_promote_majority_with_implicit_leaves():
     """Leaves without the prop don't constrain promotion (CSS inheritance).
 
-    2 Poppins + 1 Cabin + 1 plain div → Poppins wins (2/3 declared = 67%).
+    2 Inter + 1 Roboto + 1 plain div → Inter wins (2/3 declared = 67%).
     """
     root = _node(style={})
-    p1 = _node("a", source_type="TEXT", style={"font-family": "Poppins"})
-    p2 = _node("b", source_type="TEXT", style={"font-family": "Poppins"})
-    other = _node("c", source_type="TEXT", style={"font-family": "Cabin"})
+    p1 = _node("a", source_type="TEXT", style={"font-family": "Inter"})
+    p2 = _node("b", source_type="TEXT", style={"font-family": "Inter"})
+    other = _node("c", source_type="TEXT", style={"font-family": "Roboto"})
     plain = _node("d", source_type="FRAME", style={"width": "100px"})
     root.children = [p1, p2, other, plain]
     promote_inherited_styles(root)
-    assert root.style.get("font-family") == "Poppins"
+    assert root.style.get("font-family") == "Inter"
 
 
 def test_inherit_promote_skips_component_boundary():
@@ -225,7 +225,7 @@ def test_unwrap_preserves_inherited_styles_on_child():
             "font-size": "12px",
             "line-height": "18px",
             "color": "#4b4a4a",
-            "font-family": "Poppins, sans-serif",
+            "font-family": "Inter, sans-serif",
         },
         children=[inner],
     )
@@ -235,7 +235,7 @@ def test_unwrap_preserves_inherited_styles_on_child():
     assert out.style.get("font-size") == "12px"
     assert out.style.get("line-height") == "18px"
     assert out.style.get("color") == "#4b4a4a"
-    assert out.style.get("font-family") == "Poppins, sans-serif"
+    assert out.style.get("font-family") == "Inter, sans-serif"
     # And original child styles are preserved.
     assert out.style.get("width") == "100px"
     assert out.style.get("height") == "20px"

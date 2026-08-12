@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from avocado.generator.codegen import render_jsx
+from avocado.generator.tailwind import style_to_tailwind
 from avocado.model.scene_node import SceneNode
 from avocado.parser.node_mapper import map_node
 
@@ -346,3 +347,59 @@ def test_preset_props_style_wins_on_conflict() -> None:
     # preset margin wins; computed display preserved
     assert "margin: \"0\"" in out
     assert "display: \"flex\"" in out
+
+
+def test_font_family_passthrough_all_forms() -> None:
+    """Fonts pass through verbatim from Figma JSON across all output forms.
+
+    Regression guard (font-debrand): the pipeline must never inject or
+    substitute specific font names — whatever fontFamily the design uses
+    must appear in every output form. "SentinelFont" here is a sentinel: if
+    any code path hardcodes a font name, this test fails.
+    """
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Container",
+            "type": "FRAME",
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 200, "height": 100},
+            "layoutMode": "NONE",
+            "children": [
+                {
+                    "id": "1:2",
+                    "name": "Body",
+                    "type": "TEXT",
+                    "characters": "Hello",
+                    "absoluteBoundingBox": {"x": 10, "y": 10, "width": 80, "height": 24},
+                    "style": {"fontFamily": "Inter", "fontSize": 16, "fontWeight": 400},
+                },
+                {
+                    "id": "1:3",
+                    "name": "Heading",
+                    "type": "TEXT",
+                    "characters": "Title",
+                    "absoluteBoundingBox": {"x": 10, "y": 40, "width": 120, "height": 28},
+                    "style": {"fontFamily": "Roboto Slab", "fontSize": 22, "fontWeight": 500},
+                },
+            ],
+        }
+    )
+    tree = map_node(scene)
+
+    # react form: style={{...}} object. Single-word family → "Inter, sans-serif";
+    # multi-word family → node_mapper quotes it → '"Roboto Slab", sans-serif'.
+    react = render_jsx(tree, format="react")
+    assert 'fontFamily: "Inter, sans-serif"' in react
+    assert "Roboto Slab" in react
+    assert "SentinelFont" not in react
+
+    # html form: style="..." attribute. Multi-word family is HTML-escaped.
+    html = render_jsx(tree)
+    assert "font-family: Inter, sans-serif" in html
+    assert "&quot;Roboto Slab&quot;" in html
+    assert "SentinelFont" not in html
+
+    # tailwind form: font-[...] arbitrary value (spaces → underscores).
+    classes, _ = style_to_tailwind({"font-family": "Inter, sans-serif"})
+    assert "font-[Inter,_sans-serif]" in classes
+    assert "SentinelFont" not in classes

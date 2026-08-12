@@ -42,9 +42,9 @@ def render_inline_style(node: TreeNode) -> str:
     Returns empty string if no styles.
 
     FIX: escape `"` in style attribute values as `&quot;` so the HTML
-    parser doesn't truncate the style attribute at `font-family: "SF Pro",
-    sans-serif` (affects all nodes with quoted font names like SF Pro /
-    Cabin / Poppins).
+    parser doesn't truncate the style attribute at `font-family: "Multi
+    Word", sans-serif` (affects all nodes with quoted multi-word font
+    names).
     """
     if not node.style:
         return ""
