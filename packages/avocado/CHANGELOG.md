@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.0.7 (2026-08-12)
+
+### Bug Fixes
+
+- **cli**: Run name-recognition plugin before unwrap to protect components
+  ([`917706e`](https://github.com/evanfang0054/avocado-d2c/commit/917706e261638939b0178fea4a0481e757ae2fa2))
+
+- **optimize**: Unwrap static single-child wrappers with absolute subtrees
+  ([`0daf78a`](https://github.com/evanfang0054/avocado-d2c/commit/0daf78afbd2cf7626ba9a8374ae4bb98d4f9e8a9))
+
+
 ## v1.0.6 (2026-08-11)
 
 ### Bug Fixes
