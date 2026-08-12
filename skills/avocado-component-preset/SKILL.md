@@ -23,6 +23,12 @@ description: Use when an agent needs to edit or extend a component library prese
 
 ## ComponentMapping schema（真相源）
 
+> **schema 通用，不只 antd**：本 skill 以 bundled 的 `antd.yaml`（中性示例）讲解 schema 与维护规则，schema 对**任何 preset 通用**——包括用户自定义的组件库 preset（放在 `~/.avocado/presets/` 下的 yaml，与 bundled antd.yaml 结构相同，9 字段 ComponentMapping）。区别在：
+> - **位置**：bundled preset 在 wheel 内（4 层查找最低层）；用户自定义 preset 在 `~/.avocado/presets/`（用户层，`avocado path-config` 可查）
+> - **加载方式**：bundled preset 通过 `--component-lib <name>` 显式加载；用户自定义 preset 也可通过 name-based 识别插件加载（插件类声明 `PRESET = "<preset 名>"` 且 `presets_used = ["<preset 名>"]` 供 envelope `plugins_applied` 上报）
+> - **范围**：用户 preset 可覆盖 bundled 没有的业务组件（如把 `Single Icon`/`Union` 等图标图层映射成 `<Icon name="..."/>` 一行——这是消灭"图标内嵌 5+ 层定位 div"病态的正解：一行组件替代多层定位 wrapper）
+> - **增删组件流程一致**：往用户 preset 加映射照本 skill 的"加新组件的工作流"，`blockNameMatch` 白屏保护、`leaf` 判定、`dynamicProps` extractor 规则同样适用
+
 `packages/avocado/src/avocado/parser/component.py:ComponentMapping` dataclass。
 
 ### YAML 键名 vs Python 字段名映射

@@ -144,6 +144,7 @@ d["hint"]                                # 提示去掉 --dry-run 真跑
 | **preset 打包** | `--preset designer`（HTML 完整文档+预览居中+无 data-figma-id）/ `--preset dev`（react+tailwind，**组件库需显式 `--component-lib <name>`**）/ `--preset compare-ready`（react+class+summary） |
 | **HTML 预览居中** | `--preview-centered`（灰底+居中+阴影，designer preset 默认开启） |
 | **HTML 片段模式** | `--html-fragment`（退回裸 `<div>` 片段，默认 --format html 输出完整文档） |
+| **清小数像素** | `--precision 0`（默认 `2` 保留 2 位小数；`0` 全取整到整数，平均偏移仅 ~0.08px；`1` 取整到 1 位；`unset` 用 Figma 原始 float32 值如 `99.66970825195312`） |
 | 人类可读输出（彩色 stderr） | `--human` (**破坏 JSON 契约**：d2c stdout 输出 JSX 文本；schema/paths/init --human 输出 Markdown/彩色文本到 stdout，AI agent 一律不用 --human) |
 
 ## 互斥与优先级（务必遵守）
@@ -214,6 +215,31 @@ avocado URL --cache-dir /tmp/figcache --offline -o /tmp/out.jsx
 d2c 输出必须**确定性**（同输入同输出）——回归靠 diff 对比 JSX。
 - `INHERITABLE_CSS_PROPS` 必须是 **tuple**，不是 frozenset（`parser/optimize/inherit_promote.py`）。frozenset 迭代顺序依赖进程 hash 随机化 → 同输入两次跑 className 顺序不同 → diff 失效。
 - 只做成员判断的 frozenset（`_UNITLESS_NUMBER_SET`、`_VISUAL_STYLE_KEYS`）没问题。
+
+## 语义标签与代码质量边界（PR#29 / #28 决策）
+
+生成代码含语义标签，按 CSS 形式**分模式**（零视觉保证——不注入任何 `<style>` reset）：
+
+| CSS 形式 | 语义化范围 | 原因 |
+|---|---|---|
+| `tailwind` | h1-h6/p/ul/li/button + landmark（header/nav/main/footer/aside/article/section） | Tailwind preflight 已 reset UA 默认样式 |
+| `inline` / `class` | 只 landmark（main/section/nav/article/aside/header/footer——纯 display:block，渲染与 div 完全一致） | 无 preflight，h1-h6/p/ul/li/button 有 UA 默认样式，语义化会破坏零视觉 |
+
+**匹配规则**（宁少勿错——错误语义比无语义更糟，误导屏幕阅读器/SEO）：
+- 页面 root FRAME → `<main>`
+- name 精确 `Title`/`Heading`/`Headline` + font-size → `<h2>`（≥20px）/`<h3>`（≥16px），仅 tailwind
+- name 精确 `Button`/`btn`（非组件节点）→ `<button>`，仅 tailwind
+- name 列表 + 3+ 同前缀子 → `<ul>`/`<li>`，仅 tailwind
+- **组件识别优先**：INSTANCE 识别为业务组件（如 `<Button>`）胜过原生 `<button>`——agent 不要误判"为什么这个 Button 不是 button"
+- text 节点（`<span>`）不动
+
+**嵌套层级边界**（#28 决策，agent 不要误判为 bug）：
+- 结构性嵌套（卡片/区块/组件层层包裹）是 **Figma 源结构决定**——源嵌套深的任何 D2C 工具输出都深，强行合并破坏还原度
+- icon 定位链（如 `Minus > Single Icon > Union > Minus Circular > img`）是绝对定位 **containing block 层叠**（每层 `absolute`/`relative` 有定位作用）——合并会改变定位坐标
+- `unwrap_single_child` 已安全折叠所有"纯 wrapper"（无视觉/无定位作用），且**不注入 reset**
+- icon 病态深嵌（5+ 层）的**正解是组件映射**（Single Icon/Union → `<Icon name="minus"/>` 一行替代 5 层定位 div），不是合并 div
+
+**0px 冗余**：CSS 零值不需要单位，`padding: 0px 0px 12px 0px` → `0 0 12px 0` 已自动清理（HTML inline + React style 双通道）。
 
 ## 何时用 --no-beautify
 
