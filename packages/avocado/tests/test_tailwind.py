@@ -230,8 +230,9 @@ def test_apply_tailwind_walks_children() -> None:
     assert "bg-black" in child.props.get("className", "")
 
 
-def test_apply_tailwind_with_existing_className() -> None:
-    """Recognized component already has className — Tailwind classes appended."""
+def test_apply_tailwind_skips_component_nodes() -> None:
+    """Recognized components keep inline style — appending tailwind className
+    would stack with the library's internal padding/sizing (issue #35)."""
     node = TreeNode(
         id="0",
         name="btn",
@@ -242,10 +243,24 @@ def test_apply_tailwind_with_existing_className() -> None:
         style={"display": "flex", "background-color": "#ffffff"},
     )
     apply_tailwind(node)
-    cls = node.props["className"]
-    assert "btn-primary" in cls
-    assert "flex" in cls
-    assert "bg-white" in cls
+    # component className untouched (no tailwind classes appended)
+    assert node.props["className"] == "btn-primary"
+    # style kept inline (not converted to className)
+    assert node.style == {"display": "flex", "background-color": "#ffffff"}
+
+
+def test_apply_tailwind_still_converts_component_children() -> None:
+    """Plain child nodes of a component are still converted to className."""
+    child = TreeNode(id="1", name="text", source_type="TEXT", tag_name="span",
+                     style={"background-color": "#000000"})
+    node = TreeNode(id="0", name="btn", source_type="INSTANCE", tag_name="Button",
+                    is_component=True, props={"className": "btn-primary"},
+                    style={"display": "flex"}, children=[child])
+    apply_tailwind(node)
+    # component itself keeps inline style
+    assert node.style == {"display": "flex"}
+    # plain child converted
+    assert "bg-black" in child.props.get("className", "")
 
 
 # ── Readability: extended mappings ──
