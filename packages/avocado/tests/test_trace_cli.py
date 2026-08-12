@@ -70,8 +70,11 @@ def test_trace_adapter_empty_subset() -> None:
     assert json.loads(r.output)["error"]["code"] == "invalid_argument"
 
 
-def test_main_resets_trace_across_runs() -> None:
+def test_main_resets_trace_across_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     # 跨 run 无泄漏：带 trace 的 run 后，无 trace 的 run 必须重置状态
+    # 干净 CI 环境没有 ~/.avocado/config.yaml；dry-run 在创建 FigmaClient 之后
+    # 才短路，无 token 会 figma_auth_failed → exit 1，故注入假 token（不会真调 API）
+    monkeypatch.setenv("FIGMA_TOKEN", "figd_" + "0" * 40)
     r1 = CliRunner().invoke(main, [URL, "--dry-run", "--trace-adapter=preset"])
     assert r1.exit_code == 0
     assert "preset" in trace.enabled_modules()
