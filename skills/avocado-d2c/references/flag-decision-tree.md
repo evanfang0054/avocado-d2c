@@ -33,7 +33,7 @@
 
 ### 维度 4：`--component-lib`（组件库预设）
 - `None` — 输出纯 div/span
-- `antd` — antd 18 entry 映射（bundled 中立示例，见 `avocado-component-preset` skill）
+- `antd` — antd 18 entry 映射（bundled 中立示例，见 `avocado-component-adapter` skill）
 
 **选择**：
 - 下游用 antd → `--component-lib antd`

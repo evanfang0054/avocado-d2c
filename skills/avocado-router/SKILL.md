@@ -1,6 +1,6 @@
 ---
 name: avocado-router
-description: Use as the entry router when a user mentions avocado (the Figma-to-JSX CLI) or related antd tooling but their intent is ambiguous or spans multiple skills — e.g. "avocado 怎么用", "不知道选哪个 skill", "avocado 能干什么", "avocado 总览", "帮我看看 avocado", "avocado 有哪些能力", "先告诉我用哪个", "avocado 整体架构", "avocado workflow", "组件库组件怎么用", "antd", or any avocado/antd-related request that doesn't clearly map to a single sub-skill. Also triggers for first-time users asking "怎么开始 / 要配置什么 / 环境好了吗" (routes to path-config's environment checklist). Routes to the right one of: avocado-d2c (生成 JSX), avocado-path-config (路径/配置), avocado-component-preset (维护 antd.yaml). Also points to companion CLI antd (查询组件库 Props/demo/doc) when the question is about antd component library. If the user's intent is already specific (e.g. explicit "转 JSX" / "改 preset"), let the corresponding sub-skill trigger directly instead of this router.
+description: Use as the entry router when a user mentions avocado (the Figma-to-JSX CLI) or related antd tooling but their intent is ambiguous or spans multiple skills — e.g. "avocado 怎么用", "不知道选哪个 skill", "avocado 能干什么", "avocado 总览", "帮我看看 avocado", "avocado 有哪些能力", "先告诉我用哪个", "avocado 整体架构", "avocado workflow", "组件库组件怎么用", "antd", or any avocado/antd-related request that doesn't clearly map to a single sub-skill. Also triggers for first-time users asking "怎么开始 / 要配置什么 / 环境好了吗" (routes to path-config's environment checklist). Routes to the right one of: avocado-d2c (生成 JSX), avocado-path-config (路径/配置), avocado-component-adapter (组件库适配：preset + 插件). Also points to companion CLI antd (查询组件库 Props/demo/doc) when the question is about antd component library. If the user's intent is already specific (e.g. explicit "转 JSX" / "改 preset"), let the corresponding sub-skill trigger directly instead of this router.
 ---
 
 # avocado-router
@@ -13,7 +13,7 @@ avocado skill 群的**总控路由**。用户提到 avocado 但意图模糊时�
 
 - 用户问"avocado 是什么 / 怎么用 / 能干什么 / 有哪些能力"
 - 用户描述了问题但**不知道对应哪个 skill**（"我不确定该用哪个"）
-- 用户的需求**跨多个 skill**（如"改 preset 后再生成验证"= component-preset + d2c）
+- 用户的需求**跨多个 skill**（如"改 preset 后再生成验证"= avocado-component-adapter + d2c）
 - 用户给一个模糊的 figma URL 说"帮我搞一下"
 - **新用户开局问"我需要配置什么 / 环境好了吗 / 怎么开始"**（路由到 path-config 的环境检查）
 
@@ -41,7 +41,7 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 |---|---|
 | "把这个 Figma 转成代码" / "生成 JSX" / "导出" | `avocado-d2c` |
 | "preset 放哪" / "找不到资源" / "改输出目录" | `avocado-path-config` |
-| "加组件" / "antd.yaml" / "leaf 字段" / "blockNameMatch" | `avocado-component-preset` |
+| "加组件" / "antd.yaml" / "leaf 字段" / "blockNameMatch" / "写插件" | `avocado-component-adapter` |
 
 ## 3 个子 skill 导航
 
@@ -64,8 +64,8 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 - 验证 wheel 资源完整
 **关键约束**：4 层查找单一真相源；不要硬编码 `Path(__file__).parents[N]`；token 4 层查找（CLI > env > cwd/.avocado 项目级 > ~/.avocado 用户级）。
 
-### avocado-component-preset — 组件库预设维护
-**核心职责**：维护 antd.yaml 等组件映射文件。
+### avocado-component-adapter — 组件库适配（preset + 插件）
+**核心职责**：维护 antd.yaml 等组件映射文件 + 编写配套识别/提取插件。
 **典型场景**：
 - 加新组件到预设
 - INSTANCE 识别不到（Figma name 不匹配 / compId 没收录）
@@ -90,8 +90,8 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
    ├─ "路径/放哪/找不到/preset 位置/wheel"？
    │   → avocado-path-config
    │
-   ├─ "加组件/antd.yaml/识别不到/leaf/variant"？
-   │   → avocado-component-preset
+   ├─ "加组件/antd.yaml/识别不到/leaf/variant/写插件"？
+   │   → avocado-component-adapter
    │
    ├─ "组件库组件怎么用 / Props / demo / 项目里用了哪些组件"？
    │   → 直接查组件库官方文档；avocado 只负责 Figma → 代码映射
@@ -106,7 +106,7 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 1. **avocado-d2c** → 生成 JSX（`avocado <url> -o out.jsx`）
 
 ### 场景 B：加新组件到 组件库预设
-1. **avocado-component-preset** → 编辑 antd.yaml + 加 extractor
+1. **avocado-component-adapter** → 编辑 antd.yaml + 加 extractor / 写插件
 2. **avocado-d2c** → 单页生成验证
 
 ### 场景 C：用户 pip install 后跑不起来

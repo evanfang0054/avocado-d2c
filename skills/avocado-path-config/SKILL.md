@@ -1,6 +1,6 @@
 ---
 name: avocado-path-config
-description: Use when an agent needs to find, customize, or override avocado's resource paths (presets, var-maps, output dir, user config) — covers the 4-layer lookup (CLI flag > cwd/.avocado/ > ~/.avocado/ > bundled), the ~/.avocado/ user directory layout, ensure_user_dirs() first-run behavior, editable install vs wheel bundle differences, and the hard rule against hardcoding Path(__file__).parents[N]. Triggers on "改配置", "preset 改", "var-map", "找不到资源", "wheel 打包", "~/.avocado", "路径错", "哪里放", and when adding new resource types or debugging "file not found" for bundled assets. Does NOT cover running d2c (avocado-d2c) or editing antd.yaml content (avocado-component-preset).
+description: Use when an agent needs to find, customize, or override avocado's resource paths (presets, var-maps, output dir, user config) — covers the 4-layer lookup (CLI flag > cwd/.avocado/ > ~/.avocado/ > bundled), the ~/.avocado/ user directory layout, ensure_user_dirs() first-run behavior, editable install vs wheel bundle differences, and the hard rule against hardcoding Path(__file__).parents[N]. Triggers on "改配置", "preset 改", "var-map", "找不到资源", "wheel 打包", "~/.avocado", "路径错", "哪里放", and when adding new resource types or debugging "file not found" for bundled assets. Does NOT cover running d2c (avocado-d2c) or editing antd.yaml/plugin content (avocado-component-adapter).
 ---
 
 # avocado-path-config
@@ -16,7 +16,7 @@ avocado 用户配置体系 + 路径解耦手册。avocado 可在任意 cwd 独�
 - 打包 wheel 时验证资源完整
 
 **不触发**：
-- 改 antd.yaml 内容（加组件映射）→ `avocado-component-preset`
+- 改 antd.yaml 内容（加组件映射）/ 写插件 → `avocado-component-adapter`
 
 ## 新用户环境检查清单（首次配置）
 
@@ -228,7 +228,7 @@ return Path(str(bundled_path))
 # 1. 复制默认 preset 到用户目录
 cp ~/.avocado/presets/antd.yaml ~/.avocado/presets/mycompany.yaml
 
-# 2. 编辑（参见 avocado-component-preset skill）
+# 2. 编辑（参见 avocado-component-adapter skill）
 $EDITOR ~/.avocado/presets/mycompany.yaml
 
 # 3. 用
@@ -266,7 +266,7 @@ unzip -l dist/avocado_d2c-*.whl | grep _bundled
 ## 相关 skill
 
 - [avocado-d2c](../avocado-d2c/SKILL.md) — 用 preset / var-map 的主流程
-- [avocado-component-preset](../avocado-component-preset/SKILL.md) — antd.yaml 内容编辑
+- [avocado-component-adapter](../avocado-component-adapter/SKILL.md) — antd.yaml 内容编辑 / 写插件
 
 ## 真相源
 
