@@ -89,6 +89,10 @@ def _subtree_has_absolute(n: TreeNode) -> bool:
     return False
 
 
+def _is_positioned(n: TreeNode) -> bool:
+    return n.style.get("position") not in (None, "static")
+
+
 def _can_unwrap(n: TreeNode) -> bool:
     if n.source_type not in {"FRAME", "GROUP"}:
         return False
@@ -98,7 +102,14 @@ def _can_unwrap(n: TreeNode) -> bool:
         return False
     if _has_visual_style(n):
         return False
-    if _subtree_has_absolute(n):
+    # Absolute descendants: unwrapping a *positioned* wrapper changes their
+    # containing block (the wrapper participates in absolute resolution), so
+    # keep it. A static wrapper does not participate in containing-block
+    # resolution — removing it leaves every absolute descendant's containing
+    # block untouched, so unwrapping it is safe.
+    # (FIX #26: the old blanket check kept 4+ consecutive static single-child
+    # wrappers, inflating nesting depth to 18 on complex pages.)
+    if _is_positioned(n) and _subtree_has_absolute(n):
         return False
     # Don't unwrap when the single child has `flex-grow: 1` (FILL semantics).
     # The wrapper's width/height is the FILL reference; removing the wrapper

@@ -809,6 +809,14 @@ def main(
         promote_inherited_styles(tree)
     if strip_defaults_flag:
         strip_default_styles(tree)
+    # FIX: run name-based component recognition (modify_json_schema) BEFORE
+    # unwrap_single_child. unwrap merges single-child wrappers into their
+    # child; if the wrapper's Figma layer name matches a preset component
+    # (e.g. "Body" → <Text>), unwrapping it would delete a component the
+    # plugin would have recognized. Marking components first lets unwrap's
+    # is_component guard keep them.
+    if registry.has("modify_json_schema"):
+        tree = registry.call("modify_json_schema", None, tree)
     if unwrap_single_flag:
         tree = unwrap_single_child(tree)
     if gap_to_margin_flag:
@@ -822,10 +830,9 @@ def main(
     # readability. Conservative: skips component/img/text nodes.
     apply_semantic_tags(tree)
 
-    # Plugin loading moved BEFORE map_node (see above). Here we only
-    # invoke the hooks that run on the fully-built tree.
-    if registry.has("modify_json_schema"):
-        tree = registry.call("modify_json_schema", None, tree)
+    # Plugin loading moved BEFORE map_node (see above). modify_json_schema
+    # already ran before unwrap (component nodes are then protected from
+    # merging); modify_style runs here on the fully-built tree.
     if registry.has("modify_style"):
         # Walk tree, apply modify_style per node
         stack = [tree]
