@@ -587,14 +587,22 @@ def apply_tailwind(tree: TreeNode) -> None:
     """Walk tree, convert each node's style to className + leftover style.
 
     Mutates tree in-place: sets tree.props['className'] and trims tree.style.
+
+    Recognized component nodes (``is_component``) are skipped: their style
+    stays as an inline ``style={{...}}`` prop. React merges a ``style`` prop
+    onto the component's root element, reliably overriding the library's own
+    defaults, whereas a tailwind ``className`` is *appended* and stacks with
+    the component's internal token-driven padding/sizing — double padding,
+    off-size buttons, misaligned regions below (issue #35). Children of a
+    component are still converted (they are plain nodes).
     """
     stack = [tree]
     while stack:
         n = stack.pop()
-        if n.style:
+        if not n.is_component and n.style:
             classes, leftover = style_to_tailwind(n.style)
             if classes:
-                # If node has existing className (e.g. recognized component),
+                # If node has existing className (e.g. from earlier passes),
                 # prepend the tailwind classes
                 existing = n.props.get("className", "")
                 new_class = " ".join(classes)
