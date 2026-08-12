@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-08-12)
+
+### Chores
+
+- **skills**: De-brand component-adapter examples (atom → my_lib)
+  ([`8512165`](https://github.com/evanfang0054/avocado-d2c/commit/8512165dd04491855f558c92776db27d6530b322))
+
+### Documentation
+
+- **skills**: Sync d2c skills with recent iteration
+  ([`932a221`](https://github.com/evanfang0054/avocado-d2c/commit/932a22195ca7067c573ea4bd8fc77dcd1bc059c2))
+
+### Features
+
+- **trace**: Add --trace-adapter debug tracing for adapter authoring
+  ([`b43a29e`](https://github.com/evanfang0054/avocado-d2c/commit/b43a29e70bca2c82bcb2d595ac81ba2f5e50ce59))
+
+### Refactoring
+
+- **skills**: Rename avocado-component-preset to avocado-component-adapter
+  ([`eebcff5`](https://github.com/evanfang0054/avocado-d2c/commit/eebcff5b2c68fbe9f96aaa728cbfdb09d8795d44))
+
+
 ## v1.1.0 (2026-08-12)
 
 ### Bug Fixes
