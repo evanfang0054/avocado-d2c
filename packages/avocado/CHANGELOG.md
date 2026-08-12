@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.2.3 (2026-08-12)
+
+### Bug Fixes
+
+- **codegen**: Merge preset props.style into computed style
+  ([`f16e5a5`](https://github.com/evanfang0054/avocado-d2c/commit/f16e5a58d6d59ca46ea9d122512405193e649a09))
+
+- **tailwind**: Convert pseudo-component style to className
+  ([`277eead`](https://github.com/evanfang0054/avocado-d2c/commit/277eeadd3eb6eb22ae15491dee68704902f92d8a))
+
+
 ## v1.2.2 (2026-08-12)
 
 ### Bug Fixes
