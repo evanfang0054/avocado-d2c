@@ -275,3 +275,29 @@ def test_html_mode_preserves_box_sizing_without_imports() -> None:
     assert "<style>*{box-sizing:content-box}</style>" in out
     # but no import leaked
     assert "import" not in out
+
+
+# ── no injected semantic reset (issue #28/#30: 0 pollution) ──
+
+
+def test_no_semantic_reset_injected_in_react_mode() -> None:
+    """React output does not inject a semantic <style> reset (issue #30).
+
+    UA-styled semantic tags are only emitted for tailwind (preflight resets
+    them); inline/class keep them as div. No <style> reset is ever injected,
+    so the generated code stays clean.
+    """
+    from avocado.model.tree_node import TreeNode
+
+    root = TreeNode(
+        id="1:1",
+        name="Page",
+        source_type="FRAME",
+        tag_name="div",
+        children=[TreeNode(id="1:2", name="Item", source_type="FRAME", tag_name="li")],
+    )
+    # li would only be set by tailwind semanticization; render_jsx does not
+    # itself know about css_form and must not inject any reset.
+    out = render_jsx(root, format="react", box_sizing=None)
+    assert "h1,h2,h3" not in out  # no UA-styled reset CSS
+    assert "<style>" not in out  # no injected <style> at all

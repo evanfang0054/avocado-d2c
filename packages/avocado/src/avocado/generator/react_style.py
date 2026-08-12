@@ -14,6 +14,7 @@ Figma intended. The string form `"24px"` is unambiguous.
 from __future__ import annotations
 
 from avocado.generator._style_order import ordered_style
+from avocado.generator.css import normalize_css_value
 from avocado.model.tree_node import TreeNode
 
 # Vendor prefixes: `-webkit-X` → `WebkitX` (NOT `webkitX` per React convention).
@@ -110,10 +111,13 @@ def _format_value(camel_key: str, value) -> str:
             # Bare number — JS literal. Use :g to drop trailing .0.
             return f"{value:g}"
         # Non-unitless: bare number means px in our pipeline, emit "Npx".
+        # Zero is an exception — a zero length never needs a unit (CSS spec).
+        if value == 0:
+            return '"0"'
         return f'"{value:g}px"'
 
     # String value.
-    s = str(value)
+    s = normalize_css_value(str(value))
 
     # Pure number string like "24": unitless → bare, else "Npx".
     if s.strip().isdigit():
@@ -123,6 +127,9 @@ def _format_value(camel_key: str, value) -> str:
             return f'"{n}px"'
         if camel_key in _UNITLESS_NUMBER_SET:
             return f"{n}"
+        # Zero needs no unit (CSS Values & Units spec) — emit bare "0".
+        if n == 0:
+            return '"0"'
         return f'"{n}px"'
 
     # Already has px suffix. For unitless props we still keep the string form

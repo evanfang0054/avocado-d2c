@@ -84,8 +84,13 @@ def test_format_color() -> None:
 
 
 def test_format_compound_padding() -> None:
-    # Compound value preserved as-is.
-    assert _format_value("padding", "64px 0px 64px 0px") == '"64px 0px 64px 0px"'
+    # Compound value preserved, but standalone 0px tokens normalized to 0
+    # (a zero length never needs a unit per the CSS Values & Units spec).
+    assert _format_value("padding", "64px 0px 64px 0px") == '"64px 0 64px 0"'
+    assert _format_value("padding", "0px 0px 12px 0px") == '"0 0 12px 0"'
+    assert _format_value("padding", "0px") == '"0"'
+    # Composite values that are a single non-"0px" token are left alone.
+    assert _format_value("transform", "translateX(0px)") == '"translateX(0px)"'
 
 
 def test_format_css_var() -> None:

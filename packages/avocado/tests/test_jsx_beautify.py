@@ -151,3 +151,31 @@ def test_beautify_no_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(subprocess, "run", boom)
     beautify("<div>x</div>;")
+
+
+def test_beautify_fragment_with_style_tag() -> None:
+    """Fragment + <style> (React semantic-reset output) must not break.
+
+    Regression: tree-sitter models `<>...</>` as a jsx_element whose opening
+    element is `<` + `>`, and the beautifier used to reprint that as `<>>`
+    (invalid JSX, vite compile failure, React white-screen).
+    """
+    code = (
+        'export default function P() {\n'
+        '  return (\n'
+        '      <>\n'
+        '      <style>{"h1,h2,p{margin:0;padding:0}"}</style>\n'
+        '      <main className="w-10">\n'
+        '        <div>hi</div>\n'
+        '      </main>\n'
+        '      </>\n'
+        '  );\n'
+        '}\n'
+    )
+    out = beautify(code)
+    assert "<>>" not in out
+    assert "<>\n" in out
+    assert "</>\n" in out
+    # style + main preserved
+    assert "<style>" in out
+    assert "<main" in out

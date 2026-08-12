@@ -164,7 +164,15 @@ def _fmt_attr(attr_node, indent: int) -> str:
 
 
 def _fmt_open(node, indent: int) -> str:
-    """Format jsx_opening_element: `<div style={{...}}>` (attrs expanded)."""
+    """Format jsx_opening_element: `<div style={{...}}>` (attrs expanded).
+
+    A Fragment shorthand opening tag `< >` (tree-sitter models `<>...</>` as
+    a jsx_element whose opening element is just `<` + `>`) must be reprinted
+    as `<>` — treating the bare `>` as a tag name would emit the invalid
+    `<>>`. Regression found in #30 (React mode white-screen).
+    """
+    if len(node.children) == 2 and node.children[0].text == b"<" and node.children[1].text == b">":
+        return "<>"
     tag = node.children[1].text.decode()  # children[0] is '<', [1] is the tag name
     attrs = [c for c in node.children if c.type == "jsx_attribute"]
     if not attrs:
