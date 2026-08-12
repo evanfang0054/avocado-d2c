@@ -134,7 +134,7 @@
 
 ### Documentation
 
-- Switch license to Apache-2.0
+- Switch license to GPL-3.0
   ([`da192ca`](https://github.com/evanfang0054/avocado-d2c/commit/da192ca7a9c043a47abc14b45e513ee697767cf8))
 
 - Update changelog and version badge to v1.0.0
