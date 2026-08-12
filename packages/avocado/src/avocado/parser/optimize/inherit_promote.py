@@ -81,9 +81,10 @@ def promote_inherited_styles(root: TreeNode) -> None:
 
       Phase 2 (root-only enhancement): for `font-family` specifically,
       do a majority-vote lift from root's leaves — designs typically use
-      1-2 fonts (main + heading), so a clear majority (e.g. 18 Poppins + 5
-      Cabin) can safely lift Poppins to root even when a few leaves use
-      Cabin. Minority Cabin leaves keep their override. Other props
+      1-2 families (body + heading), so a clear majority (e.g. 18 of 23
+      leaves) can safely lift the dominant family to root even when a few
+      leaves use the other family. Minority leaves keep their override.
+      Other props
       (text-align, font-size, line-height, color, etc.) are NOT
       majority-voted — they would pollute non-declaring leaves via CSS
       inheritance and cause fidelity regression.
@@ -128,7 +129,7 @@ def _root_font_family_majority(root: TreeNode) -> None:
     nodes' font-family across the tree (not just leaves). The clear
     majority (> 50% of declared nodes) is lifted to root — the JSX output
     declares font-family once at the top level (D2C convention).
-    Minority sub-trees (e.g. all-Cabin heading) keep their explicit
+    Minority sub-trees (e.g. a heading subtree in the other family) keep their explicit
     font-family on intermediate nodes, so they still render correctly via
     CSS cascade.
     """
@@ -169,8 +170,8 @@ def _root_font_family_majority(root: TreeNode) -> None:
         return
 
     # Promote to root and strip matching descendants. _strip_inherited
-    # correctly preserves minority Cabin sub-trees because their
-    # font-family doesn't match the promoted Poppins value.
+    # correctly preserves minority sub-trees because their font-family
+    # doesn't match the promoted value.
     root.style["font-family"] = top_val
     for c in root.children:
         _strip_inherited(c, "font-family", top_val)

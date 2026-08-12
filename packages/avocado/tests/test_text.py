@@ -240,7 +240,7 @@ def test_real_text_node_renders_correctly() -> None:
     text_node = find_text(doc)
     scene = SceneNode.from_dict(text_node)
     tree = map_node(scene)
-    # Should have font-family (Poppins), font-size, color, line-height
-    assert "Poppins" in str(tree.style.get("font-family", ""))
+    # Should have font-family (Inter), font-size, color, line-height
+    assert "Inter" in str(tree.style.get("font-family", ""))
     assert "font-size" in tree.style
     assert "line-height" in tree.style

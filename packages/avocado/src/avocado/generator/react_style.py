@@ -136,7 +136,7 @@ def _format_value(camel_key: str, value) -> str:
     # ("Npx") because emitting a bare number would change semantics (e.g.
     # lineHeight bare = multiplier). React accepts the string "24px" for any
     # numeric prop without auto-adding px.
-    # If the value contains a double quote (e.g. font-family: "Poppins", sans-serif),
+    # If the value contains a double quote (e.g. font-family: "Multi Word", sans-serif),
     # wrap with single quotes to avoid escaping issues in JSX style object.
     if '"' in s:
         # Escape any embedded single quotes.

@@ -491,9 +491,10 @@ def _map_one(prop: str, value) -> str | None:
     if prop == "text-align" and value in _TEXT_ALIGN:
         return _TEXT_ALIGN[value]
 
-    # Readability: font-family arbitrary value (font-['Poppins'])
+    # Readability: font-family arbitrary value (font-[...])
     # Emit font-family as className to keep styles out of inline.
-    # Value may be: "Poppins" / "Poppins, sans-serif" / '"SF Pro", sans-serif'
+    # Value may be: a bare family name, "Family, sans-serif", or a quoted
+    # multi-word family like '"Multi Word", sans-serif'
     # Tailwind font-[...] expects a CSS family value; we pass it through as-is
     # but normalize quote chars so the class name stays a single token.
     if prop == "font-family" and isinstance(value, str) and value.strip():
@@ -502,8 +503,8 @@ def _map_one(prop: str, value) -> str | None:
         v = value.strip().replace('"', "'")
         # Replace spaces with underscores (Tailwind arbitrary value rule).
         # But don't touch commas or quotes — those are CSS-level.
-        # Note: Tailwind treats `_` as space, so "Poppins, sans-serif" →
-        # "Poppins,_sans-serif" — but actually we want literal space. Use
+        # Note: Tailwind treats `_` as space, so "Family, sans-serif" →
+        # "Family,_sans-serif" — but actually we want literal space. Use
         # underscores as Tailwind docs specify.
         # See https://tailwindcss.com/docs/adding-custom-styles#resolving-ambiguities
         v_tw = v.replace(" ", "_")
