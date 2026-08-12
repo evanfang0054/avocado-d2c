@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.1 (2026-08-12)
+
+### Bug Fixes
+
+- **tests**: Make trace reset test token-independent for CI
+  ([`0a1233b`](https://github.com/evanfang0054/avocado-d2c/commit/0a1233b48e59a1def17b1118dc2a1d37a7b3b643))
+
+
 ## v1.2.0 (2026-08-12)
 
 ### Chores
