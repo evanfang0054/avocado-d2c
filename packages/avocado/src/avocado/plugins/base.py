@@ -45,6 +45,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from avocado.parser.trace import is_enabled, record
+
 # All supported hook names
 HOOK_NAMES = frozenset(
     {
@@ -56,6 +58,35 @@ HOOK_NAMES = frozenset(
         "inspect_draft",
     }
 )
+
+
+# ─── trace helpers (duck-typed on TreeNode shape to avoid import cycle) ──────
+
+# Hooks that process the whole subtree (nodes_affected = subtree size).
+# Per-node hooks (modify_style/modify_props/modify_css_var) count exactly 1.
+_TREE_LEVEL_HOOKS = frozenset({"modify_json_schema", "generate_template", "inspect_draft"})
+
+
+def _find_tree_arg(args: tuple):
+    """First arg that looks like a tree node (has children)."""
+    for a in args:
+        if hasattr(a, "children"):
+            return a
+    return None
+
+
+def _count_tree_nodes(node) -> int:
+    n = 1
+    for c in getattr(node, "children", []) or []:
+        n += _count_tree_nodes(c)
+    return n
+
+
+def _collect_node_names(node) -> list[str]:
+    out = [getattr(node, "name", "") or ""]
+    for c in getattr(node, "children", []) or []:
+        out.extend(_collect_node_names(c))
+    return out
 
 
 # ─── Plugin base class ────────────────────────────────────────────────────────
@@ -155,6 +186,34 @@ class HookRegistry:
             # stderr during the handler call so the envelope stays clean.
             with contextlib.redirect_stdout(sys.stderr):
                 result = handler(*current_args)
+            # Trace hook execution (--trace-adapter=hook): which plugin ran,
+            # how many nodes it touched, sample names. Exception-safe — trace
+            # must never break the pipeline.
+            if is_enabled("plugin_hooks"):
+                try:
+                    # Whole-tree hooks process the whole subtree; per-node
+                    # hooks (modify_style/modify_props/modify_css_var) touch
+                    # exactly one target node (their first arg is that node).
+                    if hook_name in _TREE_LEVEL_HOOKS:
+                        tree_arg = _find_tree_arg(current_args)
+                        node_count = _count_tree_nodes(tree_arg) if tree_arg is not None else 1
+                        names = _collect_node_names(tree_arg) if tree_arg is not None else []
+                    else:
+                        node_count = 1
+                        names = []
+                    owner = getattr(handler, "__self__", None)
+                    plugin_name = getattr(owner, "name", "anonymous")
+                    record(
+                        "plugin_hooks",
+                        {
+                            "plugin": plugin_name,
+                            "hook": hook_name,
+                            "nodes_affected": node_count,
+                            "sample_names": sorted(n for n in names if n)[:10],
+                        },
+                    )
+                except Exception:
+                    pass  # zero-exception-risk: trace must never break the pipeline
             # For modify_* and generate_template: result is the new target
             if hook_name in {
                 "modify_props",

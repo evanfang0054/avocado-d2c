@@ -1,6 +1,6 @@
 ---
 name: avocado-component-adapter
-description: Use when an agent needs to adapt a component library to avocado — editing/extending preset YAML (antd.yaml etc.) AND writing the companion plugins (~/.avocado/plugins/*.py) that make presets work. Covers the ComponentMapping schema (9 fields: name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Also covers the Plugin base class contract (name/presets_used), the 6 hooks (modify_json_schema/modify_props/modify_style/modify_css_var/generate_template/inspect_draft) with signatures and return conventions, the name-recognizer template for recognizing non-INSTANCE layers by Figma name, and why modify_json_schema runs before unwrap (component protection). Triggers on "加组件", "antd.yaml", "preset 改", "组件识别", "INSTANCE 识别不到", "leaf 字段", "variant", "dynamicProps", "extractor", "componentId", "Figma 组件映射", "写插件", "plugin", "hook", "name-recognizer". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff.
+description: Use when an agent needs to adapt a component library to avocado — editing/extending preset YAML (antd.yaml etc.) AND writing the companion plugins (~/.avocado/plugins/*.py) that make presets work, OR debugging why a component is not recognized (--trace-adapter). Covers the ComponentMapping schema (9 fields: name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Also covers the Plugin base class contract (name/presets_used), the 6 hooks (modify_json_schema/modify_props/modify_style/modify_css_var/generate_template/inspect_draft) with signatures and return conventions, the name-recognizer template for recognizing non-INSTANCE layers by Figma name, and why modify_json_schema runs before unwrap (component protection). Also covers the --trace-adapter debug flag (preset match details / extractor outputs / plugin hook stats) for the adapter authoring loop. Triggers on "加组件", "antd.yaml", "preset 改", "组件识别", "INSTANCE 识别不到", "leaf 字段", "variant", "dynamicProps", "extractor", "componentId", "Figma 组件映射", "写插件", "plugin", "hook", "name-recognizer", "调试", "为什么没识别", "trace". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff.
 ---
 
 # avocado-component-adapter
@@ -372,7 +372,7 @@ from avocado.plugins.base import Plugin, hook
 
 class MyPlugin(Plugin):
     name = "my-plugin"              # 必填，envelope plugins_applied[*].name 上报
-    presets_used = ["atom"]         # 插件内部 load_preset 的 preset 名（供 envelope 上报真实 preset）
+    presets_used = ["my_lib"]         # 插件内部 load_preset 的 preset 名（供 envelope 上报真实 preset）
 
     @hook("modify_style")
     def add_unit(self, node, style):
@@ -393,14 +393,14 @@ class MyPlugin(Plugin):
 
 ### 完整模板：name-recognizer（按层名识别非 INSTANCE 节点）
 
-主管道只识别 INSTANCE；设计师把普通图层（FRAME/RECTANGLE/TEXT）忘了转组件时，用本插件补识别（atom 的 `~/.avocado/plugins/atom_recognizer.py` 即此模板）：
+主管道只识别 INSTANCE；设计师把普通图层（FRAME/RECTANGLE/TEXT）忘了转组件时，用本插件补识别（用户自定义组件库的 name-recognizer 插件即此模板，如 `~/.avocado/plugins/my_recognizer.py`）：
 
 ```python
 from avocado.model.tree_node import TreeNode
 from avocado.parser.component import ComponentMapping, load_preset
 from avocado.plugins.base import Plugin, hook
 
-PRESET = "atom"  # 用哪个 preset 的 name 索引
+PRESET = "my_lib"  # 用哪个 preset 的 name 索引
 
 class NameRecognizerPlugin(Plugin):
     name = "name-recognizer"
@@ -459,6 +459,37 @@ register_extractor("steps_items", steps_items)  # import 时注册（模块顶�
 4. **静默失败是设计**：extractor 失败、preset 缺失、插件加载失败都不阻断主流程
 5. **同 hook 多插件 = 最后一个注册生效**（KISS：冲突由用户修插件，不做合并策略）
 
+## 调试：--trace-adapter
+
+适配最常见的问题是"为什么这个组件没被识别 / extractor 提取了什么"。`--trace-adapter` 把识别过程的**数据透传**到 envelope（opt-in，默认关闭零影响），不用读 d2c 源码。
+
+### 用法
+
+```bash
+avocado <url> --cache-dir ... --offline --components mylib.yaml --trace-adapter        # 全开
+avocado <url> ... --trace-adapter=preset        # 只看 preset 匹配链路
+avocado <url> ... --trace-adapter=extractor     # 只看 extractor 输出
+avocado <url> ... --trace-adapter=hook          # 只看插件 hook 统计
+# 非法子集（如 --trace-adapter=foo）→ invalid_argument
+```
+
+### envelope 输出（data.trace）
+
+| 块 | 内容 | 用途 |
+|---|---|---|
+| `preset_matches` | `total/matched/unmatched` 计数 + `unmatched_details`（全量：skipped_by + reason）+ `matched_samples`（top-10：matched_by + entry_short + variant_hits） | 看**为什么没识别**（compId 未收录 / name 不匹配 / blockNameMatch 跳过 / variant 降级） |
+| `extractor_outputs` | component / extractor / path / success / keys / sample{items_len, first_title} | 看 extractor **实际提取了什么**（空返回也记录 success=false） |
+| `plugin_hooks` | plugin / hook / nodes_affected / sample_names | 看 name-recognizer 等插件**影响哪些节点**（防误识别） |
+
+### 适配闭环（4 步）
+
+1. `--trace-adapter=preset` → 看 `unmatched_details` 的 `skipped_by` + `reason`，判断该补 compId alias / 改 name / 加 extractor
+2. 改 `~/.avocado/presets/<lib>.yaml`
+3. 重跑 → 看 `matched_samples` 确认 `matched_by` 命中（unmatched 中该节点消失）
+4. 有 extractor/插件 → 看 `extractor_outputs` / `plugin_hooks` 核对数据；最后不带 trace 跑正式生成回归
+
+**确定性**：trace 数据排序稳定（同输入同输出），可进回归 diff。
+
 ## 常见 agent 错误
 
 1. **给 Button 加 leaf** → children 是 button 文字，清了就没 label
@@ -482,6 +513,6 @@ register_extractor("steps_items", steps_items)  # import 时注册（模块顶�
 - **插件系统**（Plugin 基类 / hook 装饰器 / 6 hooks / discovery）：`packages/avocado/src/avocado/plugins/base.py`
 - 内置示例 preset（antd，18 entry）：`packages/avocado/src/avocado/_bundled/presets/antd.yaml`
 - 用户自建 preset/extractor 插件：`~/.avocado/presets/` + `~/.avocado/plugins/`（见 `docs/preset-guide.md`）
-- **name-recognizer 插件实例**：`~/.avocado/plugins/atom_recognizer.py`（+ `atom_extractors.py`）
+- **name-recognizer 插件实例**：用户本地 `~/.avocado/plugins/` 下的自定义识别/提取插件（开源核心包不内置任何 extractor/recognizer）
 - 测试：`packages/avocado/tests/test_component_*.py` + `test_preset_coverage.py` + `test_preset_schema.py`
 - leaf 字段 + Button alias：`docs/preset-guide.md`（leaf / componentId alias 章节）+ 根 `CLAUDE.md` 关键约束第 6 条（blockNameMatch 白屏保护）

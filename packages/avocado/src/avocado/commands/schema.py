@@ -225,6 +225,15 @@ _SPEC: dict = {
                     "default": False,
                     "help": "Add preview-centering styles to HTML output (gray bg + centered + shadow + rounded). designer preset enables by default",
                 },
+                {
+                    "name": ["--trace-adapter"],
+                    "type": "str",
+                    "default": None,
+                    "help": "Opt-in adapter debug tracing. Bare flag enables all modules (preset/extractor/hook); "
+                    "comma-separated subset filters (e.g. --trace-adapter=preset). Adds data.trace to the envelope: "
+                    "preset match details (matched_by/skipped_by + reason), extractor outputs and plugin hook stats. "
+                    "Deterministic; default off (zero envelope impact)",
+                },
             ],
             "examples": [
                 'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" -o out.jsx',
@@ -252,6 +261,7 @@ _SPEC: dict = {
                 "mode": "dict; summary of the requested flag combination (format/css/layout)",
                 "warnings": "list[str]; non-fatal warnings (beautify failure/deprecation)",
                 "timing": "dict; includes duration_seconds (non-deterministic field)",
+                "trace": "Optional; present only with --trace-adapter. preset_matches{total,matched,unmatched,unmatched_details,matched_samples} / extractor_outputs[{component,extractor,path,success,keys,sample}] / plugin_hooks[{plugin,hook,nodes_affected,sample_names}]. Deterministic; for adapter authoring debug",
             },
         },
         {

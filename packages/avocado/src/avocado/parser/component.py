@@ -37,6 +37,7 @@ import yaml
 
 from avocado.model.scene_node import SceneNode
 from avocado.model.tree_node import TreeNode
+from avocado.parser.trace import is_enabled, record
 
 
 @dataclass
@@ -206,17 +207,26 @@ def recognize(
     Precedence: componentId first, then name (case-insensitive).
     Returns None if no match. On match, applies `variants` override (cloned
     via dataclasses.replace so the shared mapping list is not mutated).
+
+    Records a preset_matches trace entry (when --trace-adapter=preset is
+    active): matched entries carry matched_by/entry_short/variant_hits,
+    unmatched entries carry skipped_by + reason (single recording point —
+    node_mapper's instance-not-recognized branch does NOT duplicate this).
     """
     if scene.type != "INSTANCE":
         return None
 
+    trace_on = is_enabled("preset_matches")
     matched: ComponentMapping | None = None
+    matched_by: str | None = None
+    block_skipped = False
 
     # 1. componentId match
     if scene.component_id:
         for m in mapping:
             if m.component_id and m.component_id == scene.component_id:
                 matched = m
+                matched_by = "component_id"
                 break
 
     # 2. name match (case-insensitive)
@@ -231,15 +241,51 @@ def recognize(
                     # will provide items/groups/...). Without props these
                     # components throw on render and white-screen the tree.
                     if m.block_name_match and not m.dynamic_props:
+                        block_skipped = True
                         continue
                     matched = m
+                    matched_by = "name"
                     break
 
     if matched is None:
+        if trace_on:
+            # 分类优先级：compId 存在时以"未收录"为主因（block 细节并入 reason），
+            # 与 spec D2 示例一致；无 compId 时 block 跳过优先于 name 无匹配。
+            if scene.component_id:
+                skipped_by = "component_id_not_in_preset"
+                reason = f"componentId {scene.component_id!r} not in preset"
+                if block_skipped:
+                    reason += (
+                        f"; name {scene.name!r} also matched an entry with "
+                        f"blockNameMatch=true and no extractor"
+                    )
+            elif block_skipped:
+                skipped_by = "block_name_match_skip"
+                reason = (
+                    f"name {scene.name!r} matched an entry with blockNameMatch=true "
+                    f"and no extractor; name match skipped (white-screen guard)"
+                )
+            else:
+                skipped_by = "name_no_match"
+                reason = f"no preset entry matches name {scene.name!r}"
+            try:
+                record(
+                    "preset_matches",
+                    {
+                        "node_id": scene.id,
+                        "node_name": scene.name,
+                        "layer_type": scene.type,
+                        "skipped_by": skipped_by,
+                        "reason": reason[:200],
+                    },
+                )
+            except Exception:
+                pass  # zero-exception-risk: trace must never break the pipeline
         return None
 
     # 3. variants override — pick component/package by variant value.
     # Use a CLONE (m is shared across runs).
+    variant_hits: list[dict] = []
     variant_values = extract_variant_values(scene)
     if matched.variants and variant_values:
         for field_name, value in variant_values.items():
@@ -269,11 +315,48 @@ def recognize(
             # pattern → keep. Originally non-empty but the override sets it
             # empty = downgrade → return None so apply_component falls back.
             if override.get("component") == "" and matched.component:
+                if trace_on:
+                    try:
+                        record(
+                            "preset_matches",
+                            {
+                                "node_id": scene.id,
+                                "node_name": scene.name,
+                                "layer_type": scene.type,
+                                "skipped_by": "variant_downgrade",
+                                "reason": (
+                                    f"variants override for {field_name}={value!r} set "
+                                    f"component='' (downgrade); recognition abandoned"
+                                )[:200],
+                            },
+                        )
+                    except Exception:
+                        pass  # zero-exception-risk: trace must never break the pipeline
                 return None  # variants downgrade: abandon recognition
+            if trace_on:
+                variant_hits.append({"field": field_name, "value": value})
             matched = dataclasses.replace(
                 matched, component=new_component, package=new_package, leaf=new_leaf
             )
             break  # first matching variant field wins
+
+    if trace_on:
+        entry_short: dict = {"component": matched.component}
+        if matched.component_id:
+            entry_short["componentId"] = matched.component_id
+        entry: dict = {
+            "node_id": scene.id,
+            "node_name": scene.name,
+            "layer_type": scene.type,
+            "matched_by": matched_by,
+            "entry_short": entry_short,
+        }
+        if variant_hits:
+            entry["variant_hits"] = variant_hits
+        try:
+            record("preset_matches", entry)
+        except Exception:
+            pass  # zero-exception-risk: trace must never break the pipeline
 
     return matched
 
@@ -284,6 +367,25 @@ def _lookup_ci(table: dict, value: str):
         if str(k).lower() == vl:
             return v
     return None
+
+
+def _extractor_sample(extracted: dict) -> dict:
+    """Stable summary of an extractor result (never the full payload).
+
+    Takes the first NON-EMPTY list value: its length plus the first item's
+    `title` (coerced to str, when present). Empty lists are skipped — an
+    empty list carries no usable length signal. Returns {} when there is no
+    non-empty list (caller omits the sample key). Deterministic — no set
+    iteration order involved.
+    """
+    for v in extracted.values():
+        if isinstance(v, list) and v:
+            sample: dict = {"items_len": len(v)}
+            first = v[0]
+            if isinstance(first, dict) and first.get("title") is not None:
+                sample["first_title"] = str(first["title"])
+            return sample
+    return {}
 
 
 def apply_component(
@@ -337,6 +439,24 @@ def apply_component(
             scene,
             m.dynamic_props.get("path"),
         )
+        # Trace the extractor outcome so adapter authors can see what was
+        # actually extracted (keys + stable sample), not just empty/non-empty.
+        if is_enabled("extractor_outputs"):
+            try:
+                entry: dict = {
+                    "component": m.component,
+                    "extractor": m.dynamic_props["extractor"],
+                    "path": m.dynamic_props.get("path"),
+                    "success": bool(extracted),
+                    "keys": sorted(extracted.keys(), key=str) if extracted else [],
+                }
+                if extracted:
+                    sample = _extractor_sample(extracted)
+                    if sample:
+                        entry["sample"] = sample
+                record("extractor_outputs", entry)
+            except Exception:
+                pass  # zero-exception-risk: trace must never break the pipeline
         if extracted:
             tree.props.update(extracted)
         else:
