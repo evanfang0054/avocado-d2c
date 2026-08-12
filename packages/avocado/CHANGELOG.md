@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-08-12)
+
+### Bug Fixes
+
+- **beautify**: Correct Fragment shorthand reprint (React white-screen)
+  ([`71938cb`](https://github.com/evanfang0054/avocado-d2c/commit/71938cb9598b72e1e73da41c847198a3577e9957))
+
+- **quality**: Split semanticization by CSS form, drop injected reset
+  ([`fd118c2`](https://github.com/evanfang0054/avocado-d2c/commit/fd118c292870f7c803b9dc4539d586b3202c9407))
+
+### Features
+
+- **quality**: Semantic HTML tags + zero-length CSS cleanup
+  ([`f8b3ff9`](https://github.com/evanfang0054/avocado-d2c/commit/f8b3ff9de032c668d44171cacc1042eb190834e9))
+
+
 ## v1.0.7 (2026-08-12)
 
 ### Bug Fixes
