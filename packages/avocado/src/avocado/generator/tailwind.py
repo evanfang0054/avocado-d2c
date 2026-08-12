@@ -588,18 +588,26 @@ def apply_tailwind(tree: TreeNode) -> None:
 
     Mutates tree in-place: sets tree.props['className'] and trims tree.style.
 
-    Recognized component nodes (``is_component``) are skipped: their style
-    stays as an inline ``style={{...}}`` prop. React merges a ``style`` prop
-    onto the component's root element, reliably overriding the library's own
-    defaults, whereas a tailwind ``className`` is *appended* and stacks with
-    the component's internal token-driven padding/sizing — double padding,
-    off-size buttons, misaligned regions below (issue #35). Children of a
-    component are still converted (they are plain nodes).
+    Recognized component nodes (``is_component`` with a component tag) are
+    skipped: their style stays as an inline ``style={{...}}`` prop. React
+    merges a ``style`` prop onto the component's root element, reliably
+    overriding the library's own defaults, whereas a tailwind ``className``
+    is *appended* and stacks with the component's internal token-driven
+    padding/sizing — double padding, off-size buttons, misaligned regions
+    below (issue #35). Children of a component are still converted (they are
+    plain nodes).
+
+    Pseudo components (``is_component`` but an empty ``tag_name`` — a preset
+    with ``component: ''`` that keeps the Figma DOM) render as plain div/img
+    with no library default styles, so converting them to className is safe
+    and keeps className usage consistent (issue #41).
     """
     stack = [tree]
     while stack:
         n = stack.pop()
-        if not n.is_component and n.style:
+        # Skip *real* components (is_component with a tag). Pseudo components
+        # (empty tag_name → plain div/img) convert normally.
+        if not (n.is_component and n.tag_name) and n.style:
             classes, leftover = style_to_tailwind(n.style)
             if classes:
                 # If node has existing className (e.g. from earlier passes),
