@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.2 (2026-08-12)
+
+### Bug Fixes
+
+- **tailwind**: Keep component style inline to avoid className stacking
+  ([`b26a29f`](https://github.com/evanfang0054/avocado-d2c/commit/b26a29f447f67945923e1dfe85a84b4a615107bf))
+
+
 ## v1.2.1 (2026-08-12)
 
 ### Bug Fixes
