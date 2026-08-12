@@ -372,7 +372,7 @@ from avocado.plugins.base import Plugin, hook
 
 class MyPlugin(Plugin):
     name = "my-plugin"              # 必填，envelope plugins_applied[*].name 上报
-    presets_used = ["atom"]         # 插件内部 load_preset 的 preset 名（供 envelope 上报真实 preset）
+    presets_used = ["my_lib"]         # 插件内部 load_preset 的 preset 名（供 envelope 上报真实 preset）
 
     @hook("modify_style")
     def add_unit(self, node, style):
@@ -393,14 +393,14 @@ class MyPlugin(Plugin):
 
 ### 完整模板：name-recognizer（按层名识别非 INSTANCE 节点）
 
-主管道只识别 INSTANCE；设计师把普通图层（FRAME/RECTANGLE/TEXT）忘了转组件时，用本插件补识别（atom 的 `~/.avocado/plugins/atom_recognizer.py` 即此模板）：
+主管道只识别 INSTANCE；设计师把普通图层（FRAME/RECTANGLE/TEXT）忘了转组件时，用本插件补识别（用户自定义组件库的 name-recognizer 插件即此模板，如 `~/.avocado/plugins/my_recognizer.py`）：
 
 ```python
 from avocado.model.tree_node import TreeNode
 from avocado.parser.component import ComponentMapping, load_preset
 from avocado.plugins.base import Plugin, hook
 
-PRESET = "atom"  # 用哪个 preset 的 name 索引
+PRESET = "my_lib"  # 用哪个 preset 的 name 索引
 
 class NameRecognizerPlugin(Plugin):
     name = "name-recognizer"
@@ -482,6 +482,6 @@ register_extractor("steps_items", steps_items)  # import 时注册（模块顶�
 - **插件系统**（Plugin 基类 / hook 装饰器 / 6 hooks / discovery）：`packages/avocado/src/avocado/plugins/base.py`
 - 内置示例 preset（antd，18 entry）：`packages/avocado/src/avocado/_bundled/presets/antd.yaml`
 - 用户自建 preset/extractor 插件：`~/.avocado/presets/` + `~/.avocado/plugins/`（见 `docs/preset-guide.md`）
-- **name-recognizer 插件实例**：`~/.avocado/plugins/atom_recognizer.py`（+ `atom_extractors.py`）
+- **name-recognizer 插件实例**：用户本地 `~/.avocado/plugins/` 下的自定义识别/提取插件（开源核心包不内置任何 extractor/recognizer）
 - 测试：`packages/avocado/tests/test_component_*.py` + `test_preset_coverage.py` + `test_preset_schema.py`
 - leaf 字段 + Button alias：`docs/preset-guide.md`（leaf / componentId alias 章节）+ 根 `CLAUDE.md` 关键约束第 6 条（blockNameMatch 白屏保护）
