@@ -56,6 +56,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          # Full clone: with the default shallow clone (fetch-depth: 1) a
+          # concurrent merge can advance main between trigger and checkout,
+          # so github.sha (a parent commit) is not in the local object store
+          # and `git reset --hard <sha>` fails with "Could not parse object".
+          fetch-depth: 0
 
       - name: Force Release Branch to Workflow SHA
         run: git reset --hard ${{ github.sha }}
