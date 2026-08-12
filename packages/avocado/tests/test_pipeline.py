@@ -301,3 +301,48 @@ def test_no_semantic_reset_injected_in_react_mode() -> None:
     out = render_jsx(root, format="react", box_sizing=None)
     assert "h1,h2,h3" not in out  # no UA-styled reset CSS
     assert "<style>" not in out  # no injected <style> at all
+
+
+# ── preset props.style merged into computed style (issue #39) ──
+
+
+def test_preset_props_style_merged_not_duplicated() -> None:
+    """A preset `props.style` merges into the computed style — no duplicate
+    `style=` attribute (duplicate JSX props are illegal and fail to compile)."""
+    from avocado.model.tree_node import TreeNode
+
+    root = TreeNode(
+        id="1:1",
+        name="Divider",
+        source_type="INSTANCE",
+        tag_name="Divider",
+        is_component=True,
+        props={"style": {"margin": "0"}},
+        style={"display": "flex", "width": "0", "height": "18px"},
+    )
+    out = render_jsx(root, format="react", box_sizing=None)
+    # single style attribute, preset value merged in
+    assert out.count("style=") == 1
+    assert "margin: \"0\"" in out
+    assert "display: \"flex\"" in out
+
+
+def test_preset_props_style_wins_on_conflict() -> None:
+    """Preset style overrides a conflicting computed-style key (user
+    explicitly configured it)."""
+    from avocado.model.tree_node import TreeNode
+
+    root = TreeNode(
+        id="1:1",
+        name="Divider",
+        source_type="INSTANCE",
+        tag_name="Divider",
+        is_component=True,
+        props={"style": {"margin": "0"}},
+        style={"display": "flex", "margin": "8px"},  # computed has margin too
+    )
+    out = render_jsx(root, format="react", box_sizing=None)
+    assert out.count("style=") == 1
+    # preset margin wins; computed display preserved
+    assert "margin: \"0\"" in out
+    assert "display: \"flex\"" in out
