@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.3 (2026-08-13)
+
+### Bug Fixes
+
+- **style**: Emit 4-value border-radius for non-uniform corners
+  ([`e7df3e4`](https://github.com/evanfang0054/avocado-d2c/commit/e7df3e4166285f87a0939c0aea399377c1ca1579))
+
+
 ## v1.4.2 (2026-08-13)
 
 ### Bug Fixes
