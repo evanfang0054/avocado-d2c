@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-08-13)
+
+### Code Style
+
+- **cli**: 消除 main 程序化调用的 pylint 误报
+  ([`8a8b18b`](https://github.com/evanfang0054/avocado-d2c/commit/8a8b18b31301ac0ae30e28ffc5983beae1c7ea07))
+
+### Documentation
+
+- **skills**: Sync flag-decision-tree + router with trace-adapter
+  ([`403164b`](https://github.com/evanfang0054/avocado-d2c/commit/403164bfc1f8853eb8347162c83bc9ef29ec1eea))
+
+### Features
+
+- **trace**: --trace-adapter 调试能力增强
+  ([`db3e515`](https://github.com/evanfang0054/avocado-d2c/commit/db3e5157f39909b43fea236d0156f0e4065c1d22))
+
+
 ## Unreleased
 
 ### Features
