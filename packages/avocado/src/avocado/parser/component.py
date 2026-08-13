@@ -383,14 +383,11 @@ def _suggestion_for(scene: SceneNode, skipped_by: str) -> str | None:
     """Deterministic YAML skeleton for the 2 simple unmatched cases.
 
     Fills only tool-known fields (name / componentId); component & package
-    are left as <fill> for the agent/user to decide. Never guesses semantics.
-    Omitted when the skeleton would exceed 200 chars. Other skipped_by
-    scenarios return None (their fix is not a simple entry add).
-
-    Icon-like names (calendar / arrow / check / ...) get an extra hint: a
-    designer usually can't fill component/package for them — the library may
-    have no corresponding Icon component, in which case fallback div is the
-    only option (issue #49).
+    are left as <fill> for the agent/user to decide. Never guesses semantics
+    (e.g. whether a name is an icon) — that would be design-specific and
+    non-portable for an open-source tool. Omitted when the skeleton would
+    exceed 200 chars. Other skipped_by scenarios return None (their fix is
+    not a simple entry add).
 
     Note: the skeleton uses single-quoted repr for name/componentId — a
     name containing mixed quote styles would not round-trip as valid YAML,
@@ -404,40 +401,8 @@ def _suggestion_for(scene: SceneNode, skipped_by: str) -> str | None:
         lines.append(f"  componentId: {scene.component_id!r}")
     lines.append("  component: <fill>")
     lines.append("  package: <fill>")
-    if _looks_like_icon_name(scene.name):
-        lines.append(
-            "  # Icon/装饰类：确认组件库是否有对应 Icon 组件。"
-            "若无，此映射无法添加（fallback div 是唯一选择）"
-        )
     s = "\n".join(lines)
     return s if len(s) <= 200 else None
-
-
-_ICON_LIKE_KEYWORDS = (
-    "icon",
-    "calendar",
-    "arrow",
-    "chevron",
-    "check",
-    "close",
-    "airplane",
-    "plane",
-    "luggage",
-    "badge",
-    "avatar",
-    "status",
-    "search",
-    "clock",
-    "alert",
-)
-
-
-def _looks_like_icon_name(name: str | None) -> bool:
-    """Heuristic: does this layer name look like an icon / decorative asset?"""
-    if not name:
-        return False
-    nm = name.lower()
-    return any(kw in nm for kw in _ICON_LIKE_KEYWORDS)
 
 
 def _extractor_sample(extracted: dict) -> dict:

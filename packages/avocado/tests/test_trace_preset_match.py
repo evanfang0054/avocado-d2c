@@ -277,28 +277,6 @@ def test_suggestion_for_comp_id_with_block_skip() -> None:
     assert "componentId: '9:123'" in rec["suggestion"]
 
 
-def test_suggestion_icon_like_adds_hint() -> None:
-    """Icon-like names (calendar/arrow/...) get a hint to check for an Icon
-    component, since designers can't guess component/package for them."""
-    trace.enable({"preset"})
-    scene = _inst("1:21", "Calendar", "9:21")
-    tree = _tree("1:21")
-    apply_component(scene, tree, _mapping({"name": "Button", "component": "Button", "package": "lib"}))
-    rec = trace.records("preset_matches")[0]
-    assert "Icon" in rec["suggestion"]
-    assert "component: <fill>" in rec["suggestion"]
-
-
-def test_suggestion_plain_name_no_icon_hint() -> None:
-    """A non-icon name keeps the plain skeleton (no icon hint)."""
-    trace.enable({"preset"})
-    scene = _inst("1:22", "Order Summary", None)
-    tree = _tree("1:22")
-    apply_component(scene, tree, _mapping({"name": "Button", "component": "Button", "package": "lib"}))
-    rec = trace.records("preset_matches")[0]
-    assert "Icon" not in rec["suggestion"]
-
-
 def test_applied_variant_prop_hits_and_misses() -> None:
     trace.enable({"preset"})
     scene = SceneNode(id="1:9", name="Button", type="INSTANCE", component_id="9:9",
