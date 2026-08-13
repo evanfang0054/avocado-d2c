@@ -257,6 +257,10 @@ class SceneNode:
     stroke_align: str | None = None  # INSIDE/OUTSIDE/CENTER
     individual_stroke_weights: dict | None = None  # {top, right, bottom, left}
     corner_radius: float | None = None
+    # Non-uniform corner radii. Figma returns `rectangleCornerRadii` when the
+    # corners differ (cornerRadius is null then). Order matches CSS
+    # border-radius: [topLeft, topRight, bottomRight, bottomLeft].
+    rectangle_corner_radii: list[float] | None = None
     corner_smoothing: float | None = None
     # Dashed strokes: non-empty list → `border-style: dashed`.
     dash_pattern: list[float] = field(default_factory=list)
@@ -331,6 +335,11 @@ class SceneNode:
             corner_radius=(
                 float(d["cornerRadius"])
                 if "cornerRadius" in d and d["cornerRadius"] is not None
+                else None
+            ),
+            rectangle_corner_radii=(
+                [float(x) for x in d["rectangleCornerRadii"]]
+                if d.get("rectangleCornerRadii")
                 else None
             ),
             corner_smoothing=d.get("cornerSmoothing"),

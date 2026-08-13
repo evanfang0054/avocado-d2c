@@ -381,3 +381,14 @@ def test_letter_spacing_nonzero_arbitrary() -> None:
     classes, _ = style_to_tailwind({"letter-spacing": "1px"})
     assert "tracking-[1px]" in classes
     assert "tracking-1px" not in classes
+
+
+def test_border_radius_non_uniform_4_value() -> None:
+    """4-value border-radius (Figma rectangleCornerRadii) → arbitrary value.
+
+    Tailwind maps underscores to spaces in arbitrary values, so
+    rounded-[16px_16px_0_0] → border-radius: 16px 16px 0 0.
+    """
+    classes, leftover = style_to_tailwind({"border-radius": "16px 16px 0 0"})
+    assert "rounded-[16px_16px_0_0]" in classes
+    assert leftover == {}

@@ -440,6 +440,11 @@ def _map_one(prop: str, value) -> str | None:
             if px in _BORDER_RADIUS_PX:
                 return _BORDER_RADIUS_PX[px]
             return f"rounded-[{px:g}px]"
+        # Non-uniform 4-value (Figma rectangleCornerRadii): "TL TR BR BL" →
+        # arbitrary value. Tailwind maps underscores to spaces in arbitrary
+        # values, so rounded-[16px_16px_0_0] → border-radius: 16px 16px 0 0.
+        if isinstance(value, str) and len(value.split()) == 4:
+            return f"rounded-[{value.replace(' ', '_')}]"
 
     # border-color arbitrary value (parallel to bg-/text- above)
     if prop == "border-color":
