@@ -383,9 +383,11 @@ def _suggestion_for(scene: SceneNode, skipped_by: str) -> str | None:
     """Deterministic YAML skeleton for the 2 simple unmatched cases.
 
     Fills only tool-known fields (name / componentId); component & package
-    are left as <fill> for the agent/user to decide. Never guesses semantics.
-    Omitted when the skeleton would exceed 200 chars. Other skipped_by
-    scenarios return None (their fix is not a simple entry add).
+    are left as <fill> for the agent/user to decide. Never guesses semantics
+    (e.g. whether a name is an icon) — that would be design-specific and
+    non-portable for an open-source tool. Omitted when the skeleton would
+    exceed 200 chars. Other skipped_by scenarios return None (their fix is
+    not a simple entry add).
 
     Note: the skeleton uses single-quoted repr for name/componentId — a
     name containing mixed quote styles would not round-trip as valid YAML,

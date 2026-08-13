@@ -260,6 +260,21 @@ def test_issues_derived_from_records() -> None:
     assert issues["extractor_failures"] == [{"component": "Steps", "extractor": "e", "error": "empty_result"}]
 
 
+def test_issues_variant_miss_has_recommendation() -> None:
+    """variant_prop_misses entries carry a recommendation so designers know
+    whether to fix (and what happens if they don't)."""
+    trace.enable({"preset"})
+    trace.record("preset_matches", {"event": "applied", "node_id": "1:9", "node_name": "Button",
+                                    "component": "Button",
+                                    "variant_prop_misses": [{"field": "Size", "value": "Huge"}]})
+    data = _build_trace_data()
+    miss = data["issues"]["variant_prop_misses"][0]
+    assert miss["component"] == "Button"
+    assert miss["field"] == "Size"
+    assert miss["value"] == "Huge"
+    assert "recommendation" in miss
+
+
 def test_issues_empty_when_no_problems() -> None:
     trace.enable({"preset"})
     trace.record("preset_matches", {"node_id": "1:1", "node_name": "A",
