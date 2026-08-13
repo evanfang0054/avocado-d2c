@@ -152,6 +152,7 @@ else:
 | `--no-beautify` | 跳过 JSX 美化（输出 codegen 原始格式，更快） |
 | `--no-inspect` | 关闭 inspect 警告 |
 | `--figma-id` | 在每个节点输出 `data-figma-id` 调试属性（默认关闭，需要 traceability 时显式开启） |
+| `--trace-adapter[=preset,extractor,hook]` | 适配调试透传：envelope 加 `data.trace`（preset 匹配链路 / extractor 输出含 error 分类 / 插件 hook 统计 / issues 聚合），opt-in 默认关；详见 `docs/preset-guide.md` 调试技巧章节 |
 | `--human` | 彩色 stderr（**仅供 shell pipe 老用法，AI agent 禁用**） |
 
 ### 输出控制

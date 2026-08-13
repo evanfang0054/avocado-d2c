@@ -99,3 +99,47 @@ def test_extractor_trace_disabled_no_records() -> None:
     register_extractor("steps_items_off", lambda scene, path: {"items": [{"title": "a"}]})
     _apply(_scene_with_children(), _mapping_with_extractor("steps_items_off"))
     assert trace.records("extractor_outputs") == []
+
+
+def test_extractor_not_registered_error() -> None:
+    trace.enable({"extractor"})
+    _apply(_scene_with_children(), _mapping_with_extractor("does_not_exist"))
+    rec = trace.records("extractor_outputs")[0]
+    assert rec["success"] is False
+    assert rec["error"] == "not_registered"
+    assert "error_detail" not in rec
+
+
+def test_extractor_exception_error() -> None:
+    trace.enable({"extractor"})
+    def boom(scene, path):
+        raise RuntimeError("path mismatch on steps")
+    register_extractor("steps_boom", boom)
+    _apply(_scene_with_children(), _mapping_with_extractor("steps_boom"))
+    rec = trace.records("extractor_outputs")[0]
+    assert rec["success"] is False
+    assert rec["error"] == "exception"
+    assert "path mismatch on steps" in rec["error_detail"]
+    assert len(rec["error_detail"]) <= 200
+
+
+def test_extractor_empty_result_error() -> None:
+    trace.enable({"extractor"})
+    register_extractor("steps_empty", lambda scene, path: {})
+    _apply(_scene_with_children(), _mapping_with_extractor("steps_empty"))
+    rec = trace.records("extractor_outputs")[0]
+    assert rec["success"] is False
+    assert rec["error"] == "empty_result"
+    assert "error_detail" not in rec
+
+
+def test_extractor_exception_pipeline_survives() -> None:
+    trace.enable({"extractor"})
+    def boom(scene, path):
+        raise ValueError("boom")
+    register_extractor("steps_boom2", boom)
+    tree = TreeNode(id="1:1", name="Steps", source_type="INSTANCE", tag_name="Steps")
+    m = _mapping_with_extractor("steps_boom2")
+    assert apply_component(_scene_with_children(), tree, m) is True
+    assert tree.is_component is True
+    assert trace.records("extractor_outputs")[0]["error"] == "exception"

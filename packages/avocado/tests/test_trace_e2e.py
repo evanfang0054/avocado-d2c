@@ -101,3 +101,50 @@ def test_trace_deterministic(tmp_path) -> None:
     _, b = _run_cli(*args)
     assert a is not None and b is not None
     assert json.dumps(a["data"]["trace"], sort_keys=True) == json.dumps(b["data"]["trace"], sort_keys=True)
+
+
+def test_unmatched_new_fields_fixture(tmp_path) -> None:
+    """L4-1 A1 非 live 覆盖：fixture + 中性 preset 下 unmatched 记录带
+    path/suggestion，_build_trace_data 组装出 preset_matches + issues。
+
+    注：extractor_outputs / plugin_hooks 块在该环境无 extractor/插件无法产出，
+    由 Task 3/4/5 单测 + live e2e 覆盖（GDD L4-1 A1 在非 live 环境按可确定性
+    产出的块断言）。"""
+    from avocado.cli import _build_trace_data
+
+    preset = tmp_path / "mylib.yaml"
+    preset.write_text(MYLIB)
+    scene = _scene_from_fixture()
+    _, recs = _run_map(scene, preset)
+    miss = [u for u in recs if u["node_name"] == "Title"]
+    assert miss and miss[0]["skipped_by"] == "component_id_not_in_preset"
+    assert miss[0]["path"][-1] == "Title"          # path 末元素为节点名
+    assert "componentId" in miss[0]["suggestion"]  # compId 未收录场景给骨架
+    data = _build_trace_data()
+    assert data["preset_matches"]["unmatched"] == len([r for r in recs if "skipped_by" in r])
+    assert "issues" in data and data["issues"]["unmatched_by_name"]  # 派生块非空
+
+
+def test_trace_parity_non_trace_output(tmp_path) -> None:
+    """L4-2 A1 + L2-7 A2 非 live：trace 开启/关闭不改变非 trace 输出。
+
+    同一 fixture 分别以 trace 关闭/开启跑 map_node，断言采集确实发生
+    （防假阳性）且产物逐字段一致（trace 无副作用）。"""
+    import dataclasses
+
+    preset = tmp_path / "mylib.yaml"
+    preset.write_text(MYLIB)
+    scene = _scene_from_fixture()
+    mapping = load_mapping(preset)
+    trace.reset()
+    tree_off = map_node(scene, client=None, file_key="f",
+                        component_mapping=mapping, layout_mode="flex")
+    off = dataclasses.asdict(tree_off)
+    trace.reset()
+    trace.enable({"preset", "extractor", "hook"})
+    tree_on = map_node(scene, client=None, file_key="f",
+                       component_mapping=mapping, layout_mode="flex")
+    on = dataclasses.asdict(tree_on)
+    assert trace.records("preset_matches")  # trace 开启时确实采集（防假阳性）
+    assert on == off                         # 非 trace 输出逐字段一致
+    trace.reset()

@@ -2,6 +2,12 @@
 
 <!-- version list -->
 
+## Unreleased
+
+### Features
+
+- **trace**: --trace-adapter 增强——preset_matches 加 path/suggestion 与 applied_details（variant/leaf 应用侧）、extractor_outputs 加 error 枚举 + error_detail、插件识别节点补 matched_by=plugin、派生 issues 聚合块
+
 ## v1.2.4 (2026-08-13)
 
 ### Bug Fixes

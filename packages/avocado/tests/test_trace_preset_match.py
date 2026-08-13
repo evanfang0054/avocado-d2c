@@ -164,3 +164,156 @@ def test_trace_disabled_no_records() -> None:
     m = _mapping({"name": "Button", "component_id": "9:100", "component": "Button", "package": "lib"})
     apply_component(scene, tree, m)
     assert trace.records("preset_matches") == []
+
+
+def test_truncate_path_helper() -> None:
+    from avocado.parser.trace import truncate_path
+    assert truncate_path(["a", "b"]) == ["a", "b"]
+    # 10 段 → 保留离节点最近 7 段 + "…" 前缀 = 8 元素，末元素为节点名
+    assert truncate_path([f"n{i}" for i in range(10)]) == ["…", "n3", "n4", "n5", "n6", "n7", "n8", "n9"]
+
+
+def test_matched_record_has_path() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:1", "Button", "9:100")
+    tree = _tree()
+    m = _mapping({"name": "Button", "component_id": "9:100", "component": "Button", "package": "lib"})
+    apply_component(scene, tree, m, trace_path=["Page", "Section"])
+    rec = trace.records("preset_matches")[0]
+    assert rec["path"] == ["Page", "Section", "Button"]
+
+
+def test_unmatched_record_has_path_truncated() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:2", "Deep", None)
+    tree = _tree("1:2")
+    m = _mapping({"name": "Other", "component": "X", "package": "lib"})
+    apply_component(scene, tree, m, trace_path=[f"L{i}" for i in range(20)])
+    rec = trace.records("preset_matches")[0]
+    assert rec["path"][0] == "…"
+    assert rec["path"][-1] == "Deep"
+    assert len(rec["path"]) == 8
+
+
+def test_map_node_threads_trace_path() -> None:
+    from avocado.parser.node_mapper import map_node
+    trace.enable({"preset"})
+    scene = SceneNode(id="1:1", name="Page", type="FRAME", children=[
+        SceneNode(id="1:2", name="Section", type="FRAME", children=[
+            SceneNode(id="1:3", name="Button", type="INSTANCE", component_id="9:1"),
+        ]),
+    ])
+    m = _mapping({"name": "Button", "component_id": "9:1", "component": "Button", "package": "lib"})
+    map_node(scene, client=None, file_key="f", component_mapping=m, layout_mode="flex")
+    recs = [r for r in trace.records("preset_matches") if "matched_by" in r]
+    assert recs[0]["path"] == ["Page", "Section", "Button"]
+
+
+def test_variant_downgrade_record_has_path() -> None:
+    """variant_downgrade (recognition abandoned) also carries path."""
+    trace.enable({"preset"})
+    scene = SceneNode(
+        id="1:20", name="Tabs", type="INSTANCE", component_id="9:20",
+        component_properties={"Type": {"value": "Primary", "type": "VARIANT"}},
+    )
+    tree = _tree("1:20")
+    m = _mapping(
+        {"name": "Tabs", "component_id": "9:20", "component": "Tabs", "package": "lib",
+         "variants": {"Type": {"Primary": {"component": ""}}}},
+    )
+    apply_component(scene, tree, m, trace_path=["Page", "Section"])
+    rec = trace.records("preset_matches")[0]
+    assert rec["skipped_by"] == "variant_downgrade"
+    assert rec["path"] == ["Page", "Section", "Tabs"]
+
+
+def test_suggestion_for_name_no_match() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:5", "Title", None)
+    tree = _tree("1:5")
+    apply_component(scene, tree, _mapping({"name": "Button", "component": "Button", "package": "lib"}))
+    rec = trace.records("preset_matches")[0]
+    assert rec["skipped_by"] == "name_no_match"
+    assert "suggestion" in rec
+    assert "- name: 'Title'" in rec["suggestion"]
+    assert "<fill>" in rec["suggestion"]
+
+
+def test_suggestion_for_component_id_not_in_preset() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:6", "Mystery", "9:999")
+    tree = _tree("1:6")
+    apply_component(scene, tree, _mapping({"name": "Button", "component": "Button", "package": "lib"}))
+    rec = trace.records("preset_matches")[0]
+    assert "componentId: '9:999'" in rec["suggestion"]
+    assert len(rec["suggestion"]) <= 200
+
+
+def test_suggestion_not_for_block_or_downgrade() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:7", "Form", None)
+    tree = _tree("1:7")
+    apply_component(scene, tree, _mapping({"name": "Form", "component": "Form", "package": "lib", "block_name_match": True}))
+    assert "suggestion" not in trace.records("preset_matches")[0]
+
+
+def test_suggestion_omitted_when_over_200() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:8", "X" * 300, None)
+    tree = _tree("1:8")
+    apply_component(scene, tree, _mapping({"name": "Button", "component": "Button", "package": "lib"}))
+    assert "suggestion" not in trace.records("preset_matches")[0]
+
+
+def test_suggestion_for_comp_id_with_block_skip() -> None:
+    """compId missing + name blocked → still suggests (compId genuinely absent)."""
+    trace.enable({"preset"})
+    scene = _inst("1:9", "Form", "9:123")
+    tree = _tree("1:9")
+    apply_component(scene, tree, _mapping(
+        {"name": "Form", "component": "Form", "package": "lib", "block_name_match": True}))
+    rec = trace.records("preset_matches")[0]
+    assert rec["skipped_by"] == "component_id_not_in_preset"
+    assert "componentId: '9:123'" in rec["suggestion"]
+
+
+def test_applied_variant_prop_hits_and_misses() -> None:
+    trace.enable({"preset"})
+    scene = SceneNode(id="1:9", name="Button", type="INSTANCE", component_id="9:9",
+                      component_properties={"Type": {"value": "Primary", "type": "VARIANT"},
+                                            "Size": {"value": "Huge", "type": "VARIANT"}})
+    tree = _tree("1:9")
+    m = _mapping({"name": "Button", "component_id": "9:9", "component": "Button", "package": "lib",
+                  "variant_properties": {"Type": {"Primary": {"type": "primary"}}}})
+    apply_component(scene, tree, m)
+    applied = [r for r in trace.records("preset_matches") if r.get("event") == "applied"]
+    assert len(applied) == 1
+    assert applied[0]["variant_prop_hits"] == [{"field": "Type", "value": "Primary", "applied": ["type"]}]
+    assert applied[0]["variant_prop_misses"] == [{"field": "Size", "value": "Huge"}]
+    assert applied[0]["component"] == "Button"
+    # trace collection must not change applied behavior — the variant prop is set
+    assert tree.props["type"] == "primary"
+
+
+def test_applied_leaf_dropped() -> None:
+    trace.enable({"preset"})
+    scene = SceneNode(id="1:10", name="Input", type="INSTANCE", component_id="9:10",
+                      children=[SceneNode(id="1:11", name="helper text", type="TEXT")])
+    tree = TreeNode(id="1:10", name="Input", source_type="INSTANCE", tag_name="div",
+                    children=[TreeNode(id="1:11", name="helper text", source_type="TEXT", tag_name="span")])
+    m = _mapping({"name": "Input", "component_id": "9:10", "component": "Input", "package": "lib",
+                  "leaf": True, "leaf_extras": ("helper text",)})
+    apply_component(scene, tree, m)
+    applied = [r for r in trace.records("preset_matches") if r.get("event") == "applied"]
+    assert applied[0]["leaf_dropped"]["children_count"] == 1
+    assert applied[0]["leaf_dropped"]["kept_extras"] == ["helper text"]
+
+
+def test_no_applied_record_without_details() -> None:
+    trace.enable({"preset"})
+    scene = _inst("1:12", "Button", "9:12")
+    tree = _tree("1:12")
+    m = _mapping({"name": "Button", "component_id": "9:12", "component": "Button", "package": "lib",
+                  "props": {"type": "default"}})
+    apply_component(scene, tree, m)
+    assert all(r.get("event") != "applied" for r in trace.records("preset_matches"))
