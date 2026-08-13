@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-08-13)
+
+### Bug Fixes
+
+- **skills**: Quote frontmatter description to fix YAML parse
+  ([`131562e`](https://github.com/evanfang0054/avocado-d2c/commit/131562e183857eef52eac7faa8556a9c7d473ac8))
+
+
 ## v1.4.0 (2026-08-13)
 
 ### Features
