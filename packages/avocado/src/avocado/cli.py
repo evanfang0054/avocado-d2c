@@ -174,8 +174,15 @@ def _derive_issues(data: dict) -> dict:
         misses: list[dict] = []
         for a in pm.get("applied_details", []):
             for m in a.get("variant_prop_misses", []):
-                misses.append({"component": a.get("component", a.get("node_name", "")),
-                               "field": m.get("field", ""), "value": m.get("value", "")})
+                misses.append({
+                    "component": a.get("component", a.get("node_name", "")),
+                    "field": m.get("field", ""),
+                    "value": m.get("value", ""),
+                    "recommendation": (
+                        "variant 值在 preset 未映射：可补 variantProperties 让该 variant 生效，"
+                        "或忽略——不补则样式与设计稿可能有细微差异"
+                    ),
+                })
         if misses:
             misses.sort(key=lambda x: (x["component"], x["field"], x["value"]))
             issues["variant_prop_misses"] = misses[:10]
