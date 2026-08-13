@@ -74,14 +74,26 @@ def apply_container_layout(scene: SceneNode, tree: TreeNode) -> None:
     # width → last child pushed off-screen). Figma's `itemSpacing` with
     # SPACE_BETWEEN means "minimum gap if there's slack", which is already
     # what space-between distributes. So skip `gap` for distributed modes.
-    if (
-        scene.item_spacing
-        and scene.item_spacing > 0
-        and scene.primary_axis_align_items not in ("SPACE_BETWEEN",)
-        # NOTE: Figma only exposes SPACE_BETWEEN for primaryAxisAlignItems,
-        # not SPACE_AROUND/SPACE_EVENLY, so we only need to skip that one.
-    ):
-        s["gap"] = f"{_num(scene.item_spacing)}px"
+    if scene.item_spacing:
+        if (
+            scene.item_spacing > 0
+            and scene.primary_axis_align_items not in ("SPACE_BETWEEN",)
+            # NOTE: Figma only exposes SPACE_BETWEEN for primaryAxisAlignItems,
+            # not SPACE_AROUND/SPACE_EVENLY, so we only need to skip that one.
+        ):
+            s["gap"] = f"{_num(scene.item_spacing)}px"
+        elif scene.item_spacing < 0:
+            # Negative itemSpacing = Figma auto-layout overlap (children
+            # intentionally overlap, e.g. a white card pulled up over a dark
+            # header container). CSS `gap` rejects negative values, so express
+            # the overlap as a negative margin on every child after the first:
+            # column → margin-top, row → margin-left. Fixes the search-card
+            # covered by the dark container bug (issue #45).
+            margin_prop = (
+                "margin-top" if scene.layout_mode == "VERTICAL" else "margin-left"
+            )
+            for child in tree.children[1:]:
+                child.style[margin_prop] = f"{_num(scene.item_spacing)}px"
 
     # padding (concatenated shorthand when all 4 are present and equal-ish)
     pt, pr, pb, pl = (
