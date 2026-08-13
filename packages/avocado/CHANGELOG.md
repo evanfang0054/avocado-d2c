@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-08-13)
+
+### Features
+
+- **trace**: Icon hint in suggestion + recommendation for variant misses
+  ([`cff2f49`](https://github.com/evanfang0054/avocado-d2c/commit/cff2f49c0a879bcbd81ea120ed6ad9bbe14c00de))
+
+### Refactoring
+
+- **trace**: Drop icon-name heuristic from suggestion
+  ([`8be3034`](https://github.com/evanfang0054/avocado-d2c/commit/8be3034d4638306b95a0a20fc71fd9a5c196461b))
+
+
 ## v1.3.0 (2026-08-13)
 
 ### Code Style
