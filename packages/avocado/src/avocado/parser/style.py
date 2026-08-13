@@ -192,7 +192,16 @@ def style_from_scene(
     # out and overwrite neighbouring pixels — see pitfall figma_clips_overflow
     # and regression sample_page_001 (clipsContent=true, cornerRadius=None on
     # the homepage root; 2nd carousel slide bled into the white background).
-    if node.corner_radius is not None and node.corner_radius > 0:
+    # Non-uniform corners: Figma `rectangleCornerRadii` ([topLeft, topRight,
+    # bottomRight, bottomLeft]) → 4-value border-radius. Prefer it over the
+    # scalar cornerRadius, which is null when corners differ.
+    rcr = node.rectangle_corner_radii
+    if rcr and any(r > 0 for r in rcr):
+        # Zero corners render as bare 0 (unitless per CSS convention).
+        out["border-radius"] = " ".join(
+            f"{_num(r)}px" if r else "0" for r in rcr
+        )
+    elif node.corner_radius is not None and node.corner_radius > 0:
         out["border-radius"] = f"{_num(node.corner_radius)}px"
     elif node.type == "ELLIPSE":
         # ELLIPSE → <div> needs border-radius:50% to render as a circle.

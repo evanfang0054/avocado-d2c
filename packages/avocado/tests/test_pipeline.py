@@ -69,6 +69,32 @@ def test_synthetic_rectangle_with_solid_fill() -> None:
     assert "border-radius: 8px" in jsx
 
 
+def test_synthetic_non_uniform_corner_radius() -> None:
+    """rectangleCornerRadii → 4-value border-radius through the pipeline.
+
+    Regression for bottom sheets / panels whose top corners are rounded
+    ([topLeft, topRight, bottomRight, bottomLeft]) but cornerRadius is null —
+    previously the node lost its border-radius entirely.
+    """
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Sheet",
+            "type": "FRAME",
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 375, "height": 118},
+            "fills": [{"type": "SOLID", "color": {"r": 1, "g": 1, "b": 1, "a": 1}}],
+            "rectangleCornerRadii": [16.0, 16.0, 0.0, 0.0],
+        }
+    )
+    tree = map_node(scene)
+    # HTML/CSS form
+    jsx = render_jsx(tree)
+    assert "border-radius: 16px 16px 0 0" in jsx
+    # React style-object form (camelCase + px strings)
+    jsx = render_jsx(tree, format="react")
+    assert 'borderRadius: "16px 16px 0 0"' in jsx
+
+
 def test_react_format_renders_style_object_on_synthetic_box() -> None:
     """React format emits style={{...}} with camelCase + px strings."""
     scene = SceneNode.from_dict(

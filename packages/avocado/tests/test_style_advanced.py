@@ -316,3 +316,30 @@ def test_multi_fill_image_without_scale_mode_defaults_to_cover():
     )
     s = style_from_scene(node, image_fills_map={"ref-A": "/cache/A.png"})
     assert s.get("background-size") == "cover"
+
+
+# ── non-uniform corner radii → 4-value border-radius ──────────────
+# Figma returns `rectangleCornerRadii` ([topLeft, topRight, bottomRight,
+# bottomLeft]) when corners differ and cornerRadius is null. Without this,
+# e.g. a bottom sheet with 16px top corners rendered with no border-radius.
+
+
+def test_rectangle_corner_radii_emits_4_value_border_radius():
+    """rectangleCornerRadii [16,16,0,0] → border-radius: 16px 16px 0 0."""
+    node = _frame(rectangleCornerRadii=[16.0, 16.0, 0.0, 0.0])
+    s = style_from_scene(node)
+    assert s.get("border-radius") == "16px 16px 0 0"
+
+
+def test_scalar_corner_radius_still_emits_single_value():
+    """Uniform cornerRadius still emits single-value border-radius."""
+    node = _frame(cornerRadius=8)
+    s = style_from_scene(node)
+    assert s.get("border-radius") == "8px"
+
+
+def test_all_zero_rectangle_corner_radii_emits_nothing():
+    """All-zero radii → no border-radius (CSS default is 0 anyway)."""
+    node = _frame(rectangleCornerRadii=[0.0, 0.0, 0.0, 0.0])
+    s = style_from_scene(node)
+    assert "border-radius" not in s

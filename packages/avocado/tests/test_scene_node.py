@@ -143,3 +143,27 @@ def test_text_style_line_height_units() -> None:
     assert ts.font_size == 14
     assert ts.line_height_px == 20
     assert ts.line_height_unit == "PIXELS"
+
+
+def test_rectangle_corner_radii_parsed() -> None:
+    """Non-uniform radii from rectangleCornerRadii → float list.
+
+    Figma returns `rectangleCornerRadii` when corners differ (cornerRadius
+    is null then); order matches CSS: [topLeft, topRight, bottomRight,
+    bottomLeft].
+    """
+    node = SceneNode.from_dict(
+        {
+            "id": "n",
+            "name": "n",
+            "type": "FRAME",
+            "rectangleCornerRadii": [16.0, 16.0, 0.0, 0.0],
+        }
+    )
+    assert node.rectangle_corner_radii == [16.0, 16.0, 0.0, 0.0]
+    assert node.corner_radius is None
+
+
+def test_rectangle_corner_radii_absent_is_none() -> None:
+    node = SceneNode.from_dict({"id": "n", "name": "n", "type": "FRAME"})
+    assert node.rectangle_corner_radii is None
