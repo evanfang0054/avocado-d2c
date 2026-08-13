@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v1.2.4 (2026-08-13)
+
+### Bug Fixes
+
+- **layout**: Express negative itemSpacing as child overlap margin
+  ([`b8e23f8`](https://github.com/evanfang0054/avocado-d2c/commit/b8e23f86844ae7d45a9ab5429a46a5663721effc))
+
+### Chores
+
+- Switch license to GPL-3.0
+  ([`1d015be`](https://github.com/evanfang0054/avocado-d2c/commit/1d015be85d9dd67f69282e2774e9568bfb4b4d0e))
+
+### Continuous Integration
+
+- **release**: Full clone in checkout to fix concurrent-merge race
+  ([`39c0f94`](https://github.com/evanfang0054/avocado-d2c/commit/39c0f9421518e37ec9d772b2def78d78e720f168))
+
+### Refactoring
+
+- **font**: De-brand font-family comments & test data to be font-agnostic
+  ([`2dac4e5`](https://github.com/evanfang0054/avocado-d2c/commit/2dac4e54e5a36931302b289952a35f4b193db46e))
+
+
 ## v1.2.3 (2026-08-12)
 
 ### Bug Fixes
