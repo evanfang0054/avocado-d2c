@@ -269,3 +269,66 @@ def test_real_back_nav_produces_centered_row_flex() -> None:
     assert tree.style["display"] == "flex"
     assert tree.style["flex-direction"] == "row"
     assert tree.style["align-items"] == "center"
+
+
+def test_negative_item_spacing_becomes_child_margin() -> None:
+    """Negative itemSpacing (Figma auto-layout overlap) must not be dropped.
+
+    CSS `gap` rejects negative values, so a negative itemSpacing (e.g. -50
+    used to overlap a white card over a dark header container) is expressed
+    as a negative margin on every child after the first — column →
+    margin-top, row → margin-left. Fixes the search-card covered by the dark
+    container bug (issue #45).
+    """
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "search",
+            "type": "FRAME",
+            "layoutMode": "VERTICAL",
+            "itemSpacing": -50,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 375, "height": 141},
+            "children": [
+                {
+                    "id": "1:2",
+                    "name": "dark",
+                    "type": "FRAME",
+                    "absoluteBoundingBox": {"x": 0, "y": 0, "width": 375, "height": 85},
+                },
+                {
+                    "id": "1:3",
+                    "name": "white",
+                    "type": "FRAME",
+                    "absoluteBoundingBox": {"x": 0, "y": 35, "width": 327, "height": 106},
+                },
+            ],
+        }
+    )
+    tree = map_node(scene)
+    # no positive gap; the overlap is a negative margin on the 2nd+ children
+    assert "gap" not in tree.style
+    assert tree.children[0].style.get("margin-top") is None
+    assert tree.children[1].style.get("margin-top") == "-50px"
+
+
+def test_negative_item_spacing_row_uses_margin_left() -> None:
+    """Horizontal negative itemSpacing → margin-left on 2nd+ children."""
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "row",
+            "type": "FRAME",
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": -10,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 50},
+            "children": [
+                {"id": "1:2", "name": "a", "type": "FRAME",
+                 "absoluteBoundingBox": {"x": 0, "y": 0, "width": 40, "height": 50}},
+                {"id": "1:3", "name": "b", "type": "FRAME",
+                 "absoluteBoundingBox": {"x": 30, "y": 0, "width": 40, "height": 50}},
+            ],
+        }
+    )
+    tree = map_node(scene)
+    assert tree.style.get("gap") is None
+    assert tree.children[1].style.get("margin-left") == "-10px"
