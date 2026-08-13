@@ -2103,7 +2103,7 @@ def _print_version() -> None:
     try:
         from importlib.metadata import version as _meta_version
 
-        ver = _meta_version("avocado")
+        ver = _meta_version("avocado-d2c")
     except Exception:
         # fallback: read from pyproject.toml
         try:

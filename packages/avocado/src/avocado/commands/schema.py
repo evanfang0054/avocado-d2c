@@ -354,7 +354,7 @@ def run_schema_command() -> None:
         from importlib.metadata import PackageNotFoundError, version
 
         try:
-            v = version("avocado")
+            v = version("avocado-d2c")
         except PackageNotFoundError:
             v = "unknown"
     except ImportError:
