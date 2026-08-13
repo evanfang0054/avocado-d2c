@@ -201,6 +201,8 @@ def extract_variant_values(scene: SceneNode) -> dict[str, str]:
 def recognize(
     scene: SceneNode,
     mapping: list[ComponentMapping],
+    *,
+    trace_path: list[str] | None = None,
 ) -> ComponentMapping | None:
     """Try to recognize an INSTANCE node against the mapping table.
 
@@ -217,6 +219,10 @@ def recognize(
         return None
 
     trace_on = is_enabled("preset_matches")
+    if trace_on:
+        from avocado.parser.trace import truncate_path
+
+        _path = truncate_path([*(trace_path or []), scene.name])
     matched: ComponentMapping | None = None
     matched_by: str | None = None
     block_skipped = False
@@ -269,16 +275,18 @@ def recognize(
                 skipped_by = "name_no_match"
                 reason = f"no preset entry matches name {scene.name!r}"
             try:
-                record(
-                    "preset_matches",
-                    {
-                        "node_id": scene.id,
-                        "node_name": scene.name,
-                        "layer_type": scene.type,
-                        "skipped_by": skipped_by,
-                        "reason": reason[:200],
-                    },
-                )
+                rec: dict = {
+                    "node_id": scene.id,
+                    "node_name": scene.name,
+                    "layer_type": scene.type,
+                    "skipped_by": skipped_by,
+                    "reason": reason[:200],
+                    "path": _path,
+                }
+                _sug = _suggestion_for(scene, skipped_by)
+                if _sug:
+                    rec["suggestion"] = _sug
+                record("preset_matches", rec)
             except Exception:
                 pass  # zero-exception-risk: trace must never break the pipeline
         return None
@@ -328,6 +336,7 @@ def recognize(
                                     f"variants override for {field_name}={value!r} set "
                                     f"component='' (downgrade); recognition abandoned"
                                 )[:200],
+                                "path": _path,
                             },
                         )
                     except Exception:
@@ -350,6 +359,7 @@ def recognize(
             "layer_type": scene.type,
             "matched_by": matched_by,
             "entry_short": entry_short,
+            "path": _path,
         }
         if variant_hits:
             entry["variant_hits"] = variant_hits
@@ -367,6 +377,30 @@ def _lookup_ci(table: dict, value: str):
         if str(k).lower() == vl:
             return v
     return None
+
+
+def _suggestion_for(scene: SceneNode, skipped_by: str) -> str | None:
+    """Deterministic YAML skeleton for the 2 simple unmatched cases.
+
+    Fills only tool-known fields (name / componentId); component & package
+    are left as <fill> for the agent/user to decide. Never guesses semantics.
+    Omitted when the skeleton would exceed 200 chars. Other skipped_by
+    scenarios return None (their fix is not a simple entry add).
+
+    Note: the skeleton uses single-quoted repr for name/componentId — a
+    name containing mixed quote styles would not round-trip as valid YAML,
+    but that is vanishingly rare for Figma layer names and the skeleton is
+    a reference for the adapter author, not a machine-parsed contract.
+    """
+    if skipped_by not in {"name_no_match", "component_id_not_in_preset"}:
+        return None
+    lines = [f"- name: {scene.name!r}"]
+    if scene.component_id:
+        lines.append(f"  componentId: {scene.component_id!r}")
+    lines.append("  component: <fill>")
+    lines.append("  package: <fill>")
+    s = "\n".join(lines)
+    return s if len(s) <= 200 else None
 
 
 def _extractor_sample(extracted: dict) -> dict:
@@ -392,6 +426,8 @@ def apply_component(
     scene: SceneNode,
     tree: TreeNode,
     mapping: list[ComponentMapping],
+    *,
+    trace_path: list[str] | None = None,
 ) -> bool:
     """If scene is a recognized INSTANCE, mutate tree to use the component.
 
@@ -399,7 +435,7 @@ def apply_component(
     (Figma variant value → component prop) and dynamicProps (Figma children →
     items/groups/... via extractor) in addition to base props.
     """
-    m = recognize(scene, mapping)
+    m = recognize(scene, mapping, trace_path=trace_path)
     if m is None:
         return False
 
@@ -420,24 +456,32 @@ def apply_component(
     tree.props.update(m.props)
 
     # variantProperties → props
+    variant_prop_hits: list[dict] = []
+    variant_prop_misses: list[dict] = []
     variant_values = extract_variant_values(scene)
     if m.variant_properties and variant_values:
         for field_name, value in variant_values.items():
             table = m.variant_properties.get(field_name)
-            if not table:
-                continue
-            entry = table.get(value) or _lookup_ci(table, value)
+            # 未命中 = 表里没配该 field 或该值（prop 静默不生效——正是要暴露的还原度问题）
+            entry = (table.get(value) or _lookup_ci(table, value)) if table else None
             if entry:
                 tree.props.update(entry)
+                variant_prop_hits.append(
+                    {"field": field_name, "value": value, "applied": sorted(entry.keys(), key=str)}
+                )
+            else:
+                variant_prop_misses.append({"field": field_name, "value": value})
 
     # dynamicProps extractor (Phase 3)
     if m.dynamic_props and m.dynamic_props.get("extractor"):
         from avocado.parser.component_extractors import run_extractor
 
+        _err_out: list[str] = []
         extracted = run_extractor(
             m.dynamic_props["extractor"],
             scene,
             m.dynamic_props.get("path"),
+            error_out=_err_out,
         )
         # Trace the extractor outcome so adapter authors can see what was
         # actually extracted (keys + stable sample), not just empty/non-empty.
@@ -454,6 +498,17 @@ def apply_component(
                     sample = _extractor_sample(extracted)
                     if sample:
                         entry["sample"] = sample
+                else:
+                    # 失败分类：机器枚举 + 独立 detail（agent 靠 error 分支）
+                    if _err_out and _err_out[0] == "not_registered":
+                        entry["error"] = "not_registered"
+                    elif _err_out:
+                        entry["error"] = "exception"
+                        _detail = _err_out[0].removeprefix("exception: ").strip()
+                        if _detail:
+                            entry["error_detail"] = _detail[:200]
+                    else:
+                        entry["error"] = "empty_result"
                 record("extractor_outputs", entry)
             except Exception:
                 pass  # zero-exception-risk: trace must never break the pipeline
@@ -482,6 +537,7 @@ def apply_component(
     # children list to a new "extra" list returned via
     # tree.props['_leaf_extras']). The caller (node_mapper) inserts them
     # as siblings.
+    leaf_dropped_info: dict | None = None
     if m.leaf:
         # Walk the children subtree depth-first; collect any node whose own
         # name matches an extra keyword (helper text / error message / etc.).
@@ -489,6 +545,7 @@ def apply_component(
         # would be lost by `children = []`. We extract just those nodes
         # (not their parents — pulling the parent would also drag the
         # input field / label / etc. and re-double-render).
+        _pre_children_count = len(tree.children or [])
         extras: list[TreeNode] = []
         stack: list[TreeNode] = list(tree.children or [])
         while stack:
@@ -503,5 +560,36 @@ def apply_component(
         tree.text_content = None
         if extras:
             tree.props["_leaf_extras"] = extras
+        leaf_dropped_info = {
+            "children_count": _pre_children_count,
+            "kept_extras": sorted((getattr(e, "name", "") or "") for e in extras),
+        }
+
+    # ── trace: applied_details (variant/leaf 应用侧，内部 event:"applied" 标记) ──
+    if is_enabled("preset_matches"):
+        if variant_prop_hits or variant_prop_misses or (
+            leaf_dropped_info is not None and leaf_dropped_info["children_count"] > 0
+        ):
+            try:
+                applied_rec: dict = {
+                    "event": "applied",
+                    "node_id": scene.id,
+                    "node_name": scene.name,
+                }
+                if m.component:
+                    applied_rec["component"] = m.component
+                if trace_path:
+                    from avocado.parser.trace import truncate_path
+
+                    applied_rec["path"] = truncate_path([*(trace_path or []), scene.name])
+                if variant_prop_hits:
+                    applied_rec["variant_prop_hits"] = variant_prop_hits
+                if variant_prop_misses:
+                    applied_rec["variant_prop_misses"] = variant_prop_misses
+                if leaf_dropped_info is not None and leaf_dropped_info["children_count"] > 0:
+                    applied_rec["leaf_dropped"] = leaf_dropped_info
+                record("preset_matches", applied_rec)
+            except Exception:
+                pass  # zero-exception-risk: trace must never break the pipeline
 
     return True

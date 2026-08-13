@@ -135,6 +135,13 @@ avocado URL --cache-dir /tmp/figcache -o out.jsx
 avocado URL --cache-dir /tmp/figcache --offline -o out.jsx
 ```
 
+### 适配调试（--trace-adapter）
+```bash
+avocado URL --components mylib.yaml --trace-adapter=preset --summary   # 只看 preset 匹配链路
+avocado URL ... --trace-adapter=preset,extractor,hook                  # 全开（含 extractor/插件/issues）
+```
+**用途**：看"为什么没识别"（unmatched 的 skipped_by + path + suggestion）、extractor error 分类、插件 hook 统计、issues 聚合。opt-in 默认关（envelope 零影响）。详见 component-adapter skill 调试章节。
+
 ### 深度限制（debug 用）
 ```bash
 avocado URL --depth 3 -o out.jsx  # 只渲染 3 层深度

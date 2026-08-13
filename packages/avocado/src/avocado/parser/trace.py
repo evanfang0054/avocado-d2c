@@ -73,3 +73,16 @@ def reset() -> None:
     for k in _RECORDS:
         _RECORDS[k] = []
     _ENABLED.clear()
+
+
+def truncate_path(full: list[str], limit: int = 8) -> list[str]:
+    """Keep the `limit` segments nearest the node; prefix '…' when truncated.
+
+    Deterministic. Last element is always the node name. Used for the
+    data.trace `path` field so agents can locate a node in the page.
+    """
+    if limit < 2:
+        limit = 2  # keep at least the node name + one ancestor marker slot
+    if len(full) <= limit:
+        return list(full)
+    return ["…"] + list(full[-(limit - 1):])

@@ -258,6 +258,8 @@ def map_node(
     layout_mode: str = "flex",
     parent_box=None,
     parent_visible: bool = True,
+    trace_path: list[str] | None = None,
+    _trace_on: bool | None = None,
 ) -> TreeNode:
     """Recursively convert a SceneNode tree into a TreeNode tree.
 
@@ -278,6 +280,14 @@ def map_node(
     import os as _os
 
     mapping = component_mapping or []
+
+    # Trace enablement is computed once at the root and threaded down via the
+    # private _trace_on flag — recursion reuses it instead of querying the
+    # trace registry on every node (zero-overhead when trace is disabled).
+    if _trace_on is None:
+        from avocado.parser.trace import is_enabled as _trace_enabled
+
+        _trace_on = _trace_enabled("preset_matches")
 
     # Inherited visibility. Drop node entirely if any ancestor is hidden.
     effective_visible = parent_visible and scene.visible
@@ -341,6 +351,8 @@ def map_node(
                 layout_mode=layout_mode,
                 parent_box=scene.box,
                 parent_visible=effective_visible,
+                trace_path=([*(trace_path or []), scene.name] if _trace_on else None),
+                _trace_on=_trace_on,
             )
             for c in scene.children
         )
@@ -420,7 +432,7 @@ def map_node(
     # Component recognition: if INSTANCE matches user mapping, swap tag.
     # Skip for image nodes (image always wins).
     if not tree.is_img and scene.type == "INSTANCE":
-        if apply_component(scene, tree, mapping):
+        if apply_component(scene, tree, mapping, trace_path=trace_path):
             pass  # recognized — tag_name etc. already set
         else:
             # Not in mapping → emit warning

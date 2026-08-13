@@ -94,8 +94,9 @@ def _build_trace_data() -> dict:
     """Aggregate collected trace records into the data.trace envelope shape.
 
     Deterministic: all arrays sorted by stable keys; matched_samples capped at
-    10. Only enabled modules appear (subset filtering). Returns {} when trace
-    is disabled so callers can omit the key entirely.
+    10; applied_details (internal event:"applied") split out and excluded from
+    the total/matched/unmatched counts. Only enabled modules appear (subset
+    filtering). Returns {} when trace is disabled so callers can omit the key.
     """
     from avocado.parser.trace import enabled_modules, records
 
@@ -107,13 +108,20 @@ def _build_trace_data() -> dict:
         recs = records("preset_matches")
         matched = [r for r in recs if "matched_by" in r]
         unmatched = [r for r in recs if "skipped_by" in r]
-        data["preset_matches"] = {
-            "total": len(recs),
+        applied = [r for r in recs if r.get("event") == "applied"]
+        pm: dict = {
+            "total": len(matched) + len(unmatched),
             "matched": len(matched),
             "unmatched": len(unmatched),
             "unmatched_details": sorted(unmatched, key=lambda r: r.get("node_id", "")),
             "matched_samples": sorted(matched, key=lambda r: r.get("node_id", ""))[:10],
         }
+        if applied:
+            pm["applied_details"] = sorted(
+                ({k: v for k, v in r.items() if k != "event"} for r in applied),
+                key=lambda r: r.get("node_id", ""),
+            )
+        data["preset_matches"] = pm
     if "extractor" in modules:
         data["extractor_outputs"] = sorted(
             records("extractor_outputs"),
@@ -124,7 +132,97 @@ def _build_trace_data() -> dict:
             records("plugin_hooks"),
             key=lambda r: (r.get("plugin", ""), r.get("hook", "")),
         )
+    _issues = _derive_issues(data)
+    if _issues:
+        data["issues"] = _issues
     return data
+
+
+def _derive_issues(data: dict) -> dict:
+    """Deterministic top-10 issue list derived from trace blocks.
+
+    Pure derivation, no semantic judgment. Only non-empty categories appear;
+    only data from enabled modules is present in `data` already.
+    """
+    from collections import Counter
+
+    issues: dict = {}
+    pm = data.get("preset_matches")
+    if pm:
+        counts = Counter(u.get("node_name", "") for u in pm.get("unmatched_details", []))
+        by_name = [{"name": n, "count": c} for n, c in counts.items()]
+        by_name.sort(key=lambda x: (-x["count"], x["name"]))
+        _sugg: dict[str, str] = {}
+        for u in pm.get("unmatched_details", []):
+            s = u.get("suggestion")
+            if s and u.get("node_name", "") not in _sugg:
+                _sugg[u["node_name"]] = s
+        for item in by_name:
+            if item["name"] in _sugg:
+                item["suggestion"] = _sugg[item["name"]]
+        if by_name:
+            issues["unmatched_by_name"] = by_name[:10]
+        drops: list[dict] = []
+        for a in pm.get("applied_details", []):
+            ld = a.get("leaf_dropped")
+            if ld:
+                drops.append({"node_name": a.get("node_name", ""),
+                              "children_count": ld.get("children_count", 0)})
+        if drops:
+            drops.sort(key=lambda x: x["node_name"])
+            issues["leaf_drops"] = drops[:10]
+        misses: list[dict] = []
+        for a in pm.get("applied_details", []):
+            for m in a.get("variant_prop_misses", []):
+                misses.append({"component": a.get("component", a.get("node_name", "")),
+                               "field": m.get("field", ""), "value": m.get("value", "")})
+        if misses:
+            misses.sort(key=lambda x: (x["component"], x["field"], x["value"]))
+            issues["variant_prop_misses"] = misses[:10]
+    failures: list[dict] = []
+    for ex in data.get("extractor_outputs", []):
+        if ex.get("success") is False:
+            failures.append({"component": ex.get("component", ""),
+                             "extractor": ex.get("extractor", ""),
+                             "error": ex.get("error", "")})
+    if failures:
+        failures.sort(key=lambda x: (x["component"], x["extractor"], x["error"]))
+        issues["extractor_failures"] = failures[:10]
+    return issues
+
+
+def _augment_plugin_matches(tree: TreeNode) -> None:
+    """Add matched_by=plugin preset_matches records for tree nodes marked
+    is_component by plugins (e.g. name-recognizer) that never passed through
+    recognize(). Closes the gap with recognition.recognized.
+
+    Deterministic DFS walk; no-op when the preset trace module is disabled
+    (record() no-ops anyway; the early return avoids the walk entirely).
+    """
+    from avocado.parser.trace import is_enabled, record, records, truncate_path
+
+    if not is_enabled("preset_matches"):
+        return
+    known = {r.get("node_id") for r in records("preset_matches") if r.get("node_id")}
+
+    def _walk(node: TreeNode, path: list[str]) -> None:
+        path = path + [node.name]
+        if node.is_component and node.id not in known:
+            entry: dict = {
+                "node_id": node.id,
+                "node_name": node.name,
+                "layer_type": node.source_type,
+                "matched_by": "plugin",
+                "entry_short": {"component": node.tag_name},
+                "path": truncate_path(path),
+            }
+            if node.component_package:
+                entry["entry_short"]["package"] = node.component_package
+            record("preset_matches", entry)
+        for c in node.children or []:
+            _walk(c, path)
+
+    _walk(tree, [])
 
 
 @click.command()
@@ -1676,6 +1774,7 @@ def main(
         data["name"] = "avocado"
         data["version"] = _ver
         # FIX: --trace-adapter output (adapter debug details, opt-in)
+        _augment_plugin_matches(tree)
         _trace = _build_trace_data()
         if _trace:
             data["trace"] = _trace
@@ -1858,7 +1957,10 @@ def cli() -> None:
         # Note: emit_error/emit_ok already sys.exit + emit the envelope internally,
         # so SystemExit is not caught (avoid duplicate output).
         try:
-            main(standalone_mode=False)
+            # FIX: main is a Click command (@click.command + @click.argument("url")),
+            # so this programmatic call is parsed by Click (standalone_mode=False),
+            # not by the Python signature — Pylint's no-value-for-parameter is a false positive.
+            main(standalone_mode=False)  # pylint: disable=no-value-for-parameter
         except click.exceptions.UsageError as e:
             msg = str(e.message) if hasattr(e, "message") and e.message else str(e)
             # FIX: when a user passes a non-d2c format name as --format, clarify the difference

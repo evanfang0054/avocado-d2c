@@ -148,3 +148,138 @@ def test_schema_declares_trace_adapter() -> None:
     main_cmd = next(c for c in _SPEC["commands"] if c["name"] == "avocado <url>")
     flags = main_cmd["flags"]
     assert any(f["name"] == ["--trace-adapter"] for f in flags)
+
+
+# ── plugin 识别可见性（matched_by=plugin）───────────────────────────────────
+
+
+def test_augment_plugin_matches_adds_plugin_records() -> None:
+    from avocado.cli import _augment_plugin_matches
+    from avocado.model.tree_node import TreeNode as TN
+
+    trace.enable({"preset"})
+    tree = TN(id="1:1", name="Page", source_type="FRAME", tag_name="div", children=[
+        TN(id="1:2", name="Body", source_type="FRAME", tag_name="Text",
+           is_component=True, component_package="lib"),
+    ])
+    _augment_plugin_matches(tree)
+    recs = trace.records("preset_matches")
+    assert len(recs) == 1
+    assert recs[0]["matched_by"] == "plugin"
+    assert recs[0]["node_id"] == "1:2"
+    assert recs[0]["path"] == ["Page", "Body"]
+    assert recs[0]["entry_short"] == {"component": "Text", "package": "lib"}
+
+
+def test_augment_skips_already_recorded() -> None:
+    from avocado.cli import _augment_plugin_matches
+    from avocado.model.tree_node import TreeNode as TN
+
+    trace.enable({"preset"})
+    trace.record("preset_matches", {"node_id": "1:2", "node_name": "Body",
+                                    "matched_by": "name", "entry_short": {"component": "Text"}})
+    tree = TN(id="1:1", name="Page", source_type="FRAME", tag_name="div", children=[
+        TN(id="1:2", name="Body", source_type="FRAME", tag_name="Text", is_component=True),
+    ])
+    _augment_plugin_matches(tree)
+    assert len(trace.records("preset_matches")) == 1  # 不重复
+
+
+def test_augment_noop_when_disabled() -> None:
+    from avocado.cli import _augment_plugin_matches
+    from avocado.model.tree_node import TreeNode as TN
+
+    trace.disable()
+    tree = TN(id="1:1", name="Page", source_type="FRAME", tag_name="div", children=[
+        TN(id="1:2", name="Body", source_type="FRAME", tag_name="Text", is_component=True),
+    ])
+    _augment_plugin_matches(tree)
+    assert trace.records("preset_matches") == []
+
+
+def test_augment_plugin_path_truncated_on_deep_tree() -> None:
+    """Deep tree → plugin record path is truncated (≤8, '…' prefix, node last)."""
+    from avocado.cli import _augment_plugin_matches
+    from avocado.model.tree_node import TreeNode as TN
+
+    trace.enable({"preset"})
+    # build a 10-level chain with the component at the deepest leaf
+    root = TN(id="n0", name="L0", source_type="FRAME", tag_name="div")
+    cur = root
+    for i in range(1, 10):
+        nxt = TN(id=f"n{i}", name=f"L{i}", source_type="FRAME", tag_name="div")
+        cur.children = [nxt]
+        cur = nxt
+    cur.is_component = True
+    cur.tag_name = "Text"
+    cur.component_package = "lib"
+
+    _augment_plugin_matches(root)
+    recs = trace.records("preset_matches")
+    assert len(recs) == 1
+    assert recs[0]["path"][0] == "…"
+    assert recs[0]["path"][-1] == "L9"
+    assert len(recs[0]["path"]) == 8
+
+
+# ── 聚合改造 + issues 派生 ──────────────────────────────────────────────────
+
+
+def test_build_trace_data_splits_applied_details() -> None:
+    trace.enable({"preset"})
+    trace.record("preset_matches", {"node_id": "1:1", "node_name": "A",
+                                    "matched_by": "name", "entry_short": {"component": "A"}})
+    trace.record("preset_matches", {"event": "applied", "node_id": "1:1", "node_name": "A",
+                                    "variant_prop_misses": [{"field": "Size", "value": "Huge"}]})
+    data = _build_trace_data()
+    pm = data["preset_matches"]
+    assert pm["total"] == 1 and pm["matched"] == 1 and pm["unmatched"] == 0
+    assert pm["applied_details"] == [{"node_id": "1:1", "node_name": "A",
+                                      "variant_prop_misses": [{"field": "Size", "value": "Huge"}]}]
+
+
+def test_issues_derived_from_records() -> None:
+    trace.enable({"preset", "extractor"})
+    trace.record("preset_matches", {"node_id": "1:1", "node_name": "Title",
+                                    "skipped_by": "name_no_match", "reason": "x",
+                                    "suggestion": "- name: 'Title'\n  component: <fill>\n  package: <fill>"})
+    trace.record("preset_matches", {"node_id": "1:2", "node_name": "Title",
+                                    "skipped_by": "name_no_match", "reason": "x",
+                                    "suggestion": "- name: 'Title'\n  component: <fill>\n  package: <fill>"})
+    trace.record("preset_matches", {"event": "applied", "node_id": "1:3", "node_name": "Input",
+                                    "leaf_dropped": {"children_count": 2, "kept_extras": []}})
+    trace.record("extractor_outputs", {"component": "Steps", "extractor": "e",
+                                       "success": False, "error": "empty_result"})
+    data = _build_trace_data()
+    issues = data["issues"]
+    assert issues["unmatched_by_name"][0] == {
+        "name": "Title", "count": 2,
+        "suggestion": "- name: 'Title'\n  component: <fill>\n  package: <fill>",
+    }
+    assert issues["leaf_drops"] == [{"node_name": "Input", "children_count": 2}]
+    assert issues["extractor_failures"] == [{"component": "Steps", "extractor": "e", "error": "empty_result"}]
+
+
+def test_issues_empty_when_no_problems() -> None:
+    trace.enable({"preset"})
+    trace.record("preset_matches", {"node_id": "1:1", "node_name": "A",
+                                    "matched_by": "name", "entry_short": {"component": "A"}})
+    data = _build_trace_data()
+    assert "issues" not in data
+
+
+# ── schema 自省同步 ─────────────────────────────────────────────────────────
+
+
+def test_schema_describes_enhanced_trace() -> None:
+    from avocado.commands.schema import _SPEC
+
+    main_cmd = next(c for c in _SPEC["commands"] if c["name"] == "avocado <url>")
+    trace_desc = main_cmd["data_artifacts"]["trace"]
+    assert "applied_details" in trace_desc
+    assert "issues" in trace_desc
+    assert "error" in trace_desc
+    assert "suggestion" in trace_desc
+    flag = next(f for f in main_cmd["flags"] if f["name"] == ["--trace-adapter"])
+    assert "issues" in flag["help"]
+    assert "suggestion" in flag["help"]

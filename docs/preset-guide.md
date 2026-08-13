@@ -432,7 +432,15 @@ for u in t['unmatched_details'][:5]:
 avocado <url> --components mylib.yaml --trace-adapter=extractor,hook --summary
 ```
 
-**适配闭环**：看 unmatched 原因 → 改 preset（补 compId alias / 改 name / 加 extractor）→ 重跑看 `matched_samples.matched_by` 确认命中 → 核对 extractor sample / 插件影响节点 → 不带 trace 做正式回归。
+**新字段说明（--trace-adapter 增强后）**：
+- `unmatched_details[].path`：祖先名链（≤8 段，截断前缀 `…`），快速定位节点在页面的位置
+- `unmatched_details[].suggestion`：仅 `name_no_match` / `component_id_not_in_preset` 场景的**确定性 YAML 骨架**（component/package 为 `<fill>` 需确认；不做语义猜测）
+- `preset_matches.applied_details`：匹配后的应用侧——`variant_prop_hits`（variant 值→prop 生效了什么）/ `variant_prop_misses`（Figma variant 值在表里没配 → prop 静默不生效）/ `leaf_dropped`（leaf 清空了几个 children、保留了几个 leafExtras）
+- `extractor_outputs[].error`：`not_registered`（注册名错）/ `exception`（代码抛错，看 `error_detail`）/ `empty_result`（**合法静默降级**，不是 bug）
+- `matched_by` 新增 `plugin`：name-recognizer 等插件标记的节点也出现在 preset_matches，与 `recognition.recognized` 口径一致
+- `issues`：派生聚合块（unmatched 按 name 聚合 + 骨架 / extractor 失败 / leaf 丢弃 / variant miss），top-10 排序——"先修什么"入口
+
+**适配闭环（4 步，增强后）**：跑 `--trace-adapter=preset,extractor,hook --summary` → 看 `issues` 先修什么 + `unmatched_details` 的 path/skipped_by/suggestion → 按骨架补 preset → 重跑确认 `matched_by` 命中、issues 减少 → 不带 trace 正式回归。
 
 ---
 

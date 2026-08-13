@@ -139,6 +139,7 @@ d["hint"]                                # 提示去掉 --dry-run 真跑
 | 零网络重跑 | `--cache-dir /tmp/figcache --offline` |
 | 调试输出（跳过美化） | `--no-beautify`（codegen 原始输出，更快） |
 | 调试加 data-figma-id 属性 | `--figma-id`（每个节点加 data-figma-id，traceability/debug 用，默认关） |
+| 适配调试透传 | `--trace-adapter[=preset,extractor,hook]`（opt-in 默认关；envelope 加 `data.trace`：preset 匹配链路 + path/suggestion、applied_details、extractor error 分类、插件 hook 统计、issues 聚合；供适配/还原度调试，详见 avocado-component-adapter skill） |
 | 验证参数不调 API | `--dry-run`（验证 URL+token+params，不写文件，envelope 含 validated + would_write） |
 | 瘦身 envelope | `--summary`（省 jsx/css 文本，加 jsx_omitted/css_omitted/code_location） |
 | **preset 打包** | `--preset designer`（HTML 完整文档+预览居中+无 data-figma-id）/ `--preset dev`（react+tailwind，**组件库需显式 `--component-lib <name>`**）/ `--preset compare-ready`（react+class+summary） |

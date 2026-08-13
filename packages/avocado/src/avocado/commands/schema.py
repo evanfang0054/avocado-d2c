@@ -231,7 +231,8 @@ _SPEC: dict = {
                     "default": None,
                     "help": "Opt-in adapter debug tracing. Bare flag enables all modules (preset/extractor/hook); "
                     "comma-separated subset filters (e.g. --trace-adapter=preset). Adds data.trace to the envelope: "
-                    "preset match details (matched_by/skipped_by + reason), extractor outputs and plugin hook stats. "
+                    "preset match details (matched_by/skipped_by + reason + path + suggestion), applied_details (variant/leaf), "
+                    "extractor outputs (success + error enum) and plugin hook stats, plus a derived issues top-10. "
                     "Deterministic; default off (zero envelope impact)",
                 },
             ],
@@ -261,7 +262,7 @@ _SPEC: dict = {
                 "mode": "dict; summary of the requested flag combination (format/css/layout)",
                 "warnings": "list[str]; non-fatal warnings (beautify failure/deprecation)",
                 "timing": "dict; includes duration_seconds (non-deterministic field)",
-                "trace": "Optional; present only with --trace-adapter. preset_matches{total,matched,unmatched,unmatched_details,matched_samples} / extractor_outputs[{component,extractor,path,success,keys,sample}] / plugin_hooks[{plugin,hook,nodes_affected,sample_names}]. Deterministic; for adapter authoring debug",
+                "trace": "Optional; present only with --trace-adapter. preset_matches{total,matched,unmatched,unmatched_details(node_id,node_name,layer_type,skipped_by,reason,path,suggestion),matched_samples(node_id,node_name,layer_type,matched_by,entry_short,variant_hits,path),applied_details(node_id,node_name,component?,path,variant_prop_hits,variant_prop_misses,leaf_dropped)} / extractor_outputs[{component,extractor,path,success,keys,sample,error?(not_registered/exception/empty_result),error_detail?}] / plugin_hooks[{plugin,hook,nodes_affected,sample_names}] / issues{unmatched_by_name,extractor_failures,leaf_drops,variant_prop_misses}. Deterministic; for adapter authoring debug",
             },
         },
         {
