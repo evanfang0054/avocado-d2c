@@ -1858,7 +1858,10 @@ def cli() -> None:
         # Note: emit_error/emit_ok already sys.exit + emit the envelope internally,
         # so SystemExit is not caught (avoid duplicate output).
         try:
-            main(standalone_mode=False)
+            # FIX: main is a Click command (@click.command + @click.argument("url")),
+            # so this programmatic call is parsed by Click (standalone_mode=False),
+            # not by the Python signature — Pylint's no-value-for-parameter is a false positive.
+            main(standalone_mode=False)  # pylint: disable=no-value-for-parameter
         except click.exceptions.UsageError as e:
             msg = str(e.message) if hasattr(e, "message") and e.message else str(e)
             # FIX: when a user passes a non-d2c format name as --format, clarify the difference
