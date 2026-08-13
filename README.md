@@ -97,6 +97,31 @@ stdout 永远是单一 JSON envelope（不混入日志），退出码 `0` 成功
 
 失败时返回 error code + hint，如 `figma_rate_limited`（退避重试）、`invalid_argument`（改参数，不要重试）、`figma_auth_failed`（让用户重新生成 token）。先跑 `avocado schema` 可自省全部命令 / flag / 错误码，`avocado paths` 查看资源路径。
 
+### 安装 avocado Skills（AI Agent 技能包）
+
+avocado 附带 4 个 AI agent skill（`skills/` 目录），让 Claude Code 等助手直接用最佳实践操作 avocado（flag 选择、envelope 解析、组件库适配、路径配置）。用 Skills CLI 一键安装：
+
+```bash
+# 安装全部 4 个 skill 到当前项目（默认 Claude Code）
+npx skills add evanfang0054/avocado-d2c -y
+
+# 全局安装（所有项目可用，写入 ~/.claude/skills/）
+npx skills add evanfang0054/avocado-d2c -y -g
+
+# 只装指定 skill
+npx skills add evanfang0054/avocado-d2c -y -s avocado-d2c -s avocado-router
+
+# 指定目标 AI 助手
+npx skills add evanfang0054/avocado-d2c -y -a claude-code
+```
+
+| skill | 用途 |
+|---|---|
+| `avocado-d2c` | Figma URL → JSX/CSS 生成（flag 决策表、envelope 解析、error code 处理） |
+| `avocado-router` | 入口路由（用户意图模糊时判断该走哪个子 skill） |
+| `avocado-component-adapter` | 组件库适配（preset YAML + 插件 + `--trace-adapter` 调试） |
+| `avocado-path-config` | 资源路径 4 层查找与配置 |
+
 ## 输出模式
 
 | 组合 | 形态 | 场景 |
