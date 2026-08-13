@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.2 (2026-08-13)
+
+### Bug Fixes
+
+- **version**: Query distribution name avocado-d2c for --version
+  ([`073f499`](https://github.com/evanfang0054/avocado-d2c/commit/073f499df6dd08a065d228d416a22bf56c252a59))
+
+### Documentation
+
+- Add npx skills install guide + skill usage table
+  ([`433c959`](https://github.com/evanfang0054/avocado-d2c/commit/433c959b46e812948ab0160f208e7c4828a0abc8))
+
+
 ## v1.4.1 (2026-08-13)
 
 ### Bug Fixes
