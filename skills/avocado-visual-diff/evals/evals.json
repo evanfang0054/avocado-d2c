@@ -1,0 +1,41 @@
+{
+  "skill_name": "avocado-visual-diff",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我刚用 avocado 从 Figma 生成了一版页面，本地起在 http://localhost:8000/page.html，设计稿原图是 /tmp/avocado-vdiff-fixtures/design.png。帮我对比一下这版页面和设计稿，输出差异对应的 DOM 区域（哪个元素、selector），我要照着修。",
+      "expected_output": "JSON 报告解析：列出每个差异 region 的 cssRect、candidates[0] 的 selector 与文本，明确指出 4 处差异（#hero-sub 文字、.card.pro 背景、#pro-price 文字、#site-footer 文字）",
+      "files": [],
+      "assertions": [
+        "报告 summary 包含 #pro-card 责任元素（Pro 卡背景色+价格差异）",
+        "报告 summary 包含 #hero-sub 责任元素（副标题文字差异）",
+        "报告 summary 包含 #site-footer 责任元素（footer 文字差异）",
+        "报告 match=false 且 reason=pixel-diff、diffCount>0",
+        "输出是结构化报告（report.json 或等价 JSON），给出 selector 级别的定位"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "页面 http://localhost:8000/page.html 和设计稿 /tmp/avocado-vdiff-fixtures/design.png 对比后，副标题和 Pro 卡价格、背景色都不对。请修复页面让它在视觉上匹配设计稿，然后重新对比验证到 match。",
+      "expected_output": "修复 page.html（恢复 A 版内容），重跑 compare.mjs 得到 match:true（或 0 个实质差异 region）",
+      "files": [],
+      "assertions": [
+        "修复覆盖 4 处注入差异（#hero-sub 文字、.card.pro 背景、#pro-price 文字、#site-footer 文字）",
+        "最终验证报告 match=true 或 diffCount=0",
+        "修复过程中至少重跑了一次对比验证（存在验证证据，如 report.json/日志）",
+        "summary 说明每处修改的依据（不是盲目复制 design.html）"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "帮我检查一下线上页面 https://example.com 和这张设计稿 /tmp/avocado-vdiff-fixtures/design.png 的还原度，主要看哪些 DOM 区域有差异。",
+      "expected_output": "跑通流程并输出报告；由于 example.com 与设计稿完全不同，应给出 layout-diff 或大量差异的合理说明，而不是报错退出",
+      "files": [],
+      "assertions": [
+        "对比流程跑通，没有以报错/放弃告终",
+        "报告如实反映 layout-diff 或大面积像素差异（match=false）",
+        "对'设计稿与线上站内容完全不同'给出合理解读（不能当作真实还原度问题）"
+      ]
+    }
+  ]
+}

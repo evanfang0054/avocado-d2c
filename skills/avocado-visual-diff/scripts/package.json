@@ -1,0 +1,11 @@
+{
+  "name": "avocado-visual-diff-scripts",
+  "private": true,
+  "type": "module",
+  "description": "compare.mjs dependencies: Playwright screenshot + odiff pixel diff + DOM attribution",
+  "dependencies": {
+    "odiff-bin": "^4.5.0",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0"
+  }
+}
