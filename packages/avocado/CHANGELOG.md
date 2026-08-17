@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-08-17)
+
+### Features
+
+- **skills**: Add avocado-visual-diff for webpage vs design comparison
+  ([`7abe916`](https://github.com/evanfang0054/avocado-d2c/commit/7abe916d7abd42a9b63abaedc21ab92fe05884ce))
+
+
 ## v1.4.3 (2026-08-13)
 
 ### Bug Fixes
