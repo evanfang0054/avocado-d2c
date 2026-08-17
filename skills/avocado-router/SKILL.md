@@ -1,6 +1,6 @@
 ---
 name: avocado-router
-description: "Use as the entry router when a user mentions avocado (the Figma-to-JSX CLI) or related antd tooling but their intent is ambiguous or spans multiple skills — e.g. \"avocado 怎么用\", \"不知道选哪个 skill\", \"avocado 能干什么\", \"avocado 总览\", \"帮我看看 avocado\", \"avocado 有哪些能力\", \"先告诉我用哪个\", \"avocado 整体架构\", \"avocado workflow\", \"组件库组件怎么用\", \"为什么没识别\", \"trace 调试\", \"antd\", or any avocado/antd-related request that doesn't clearly map to a single sub-skill. Also triggers for first-time users asking \"怎么开始 / 要配置什么 / 环境好了吗\" (routes to path-config's environment checklist). Routes to the right one of: avocado-d2c (生成 JSX), avocado-path-config (路径/配置), avocado-component-adapter (组件库适配：preset + 插件 + --trace-adapter 调试). Also points to companion CLI antd (查询组件库 Props/demo/doc) when the question is about antd component library. If the user's intent is already specific (e.g. explicit \"转 JSX\" / \"改 preset\"), let the corresponding sub-skill trigger directly instead of this router."
+description: "Use as the entry router when a user mentions avocado (the Figma-to-JSX CLI) or related antd tooling but their intent is ambiguous or spans multiple skills — e.g. \"avocado 怎么用\", \"不知道选哪个 skill\", \"avocado 能干什么\", \"avocado 总览\", \"帮我看看 avocado\", \"avocado 有哪些能力\", \"先告诉我用哪个\", \"avocado 整体架构\", \"avocado workflow\", \"组件库组件怎么用\", \"为什么没识别\", \"trace 调试\", \"antd\", or any avocado/antd-related request that doesn't clearly map to a single sub-skill. Also triggers for first-time users asking \"怎么开始 / 要配置什么 / 环境好了吗\" (routes to path-config's environment checklist). Routes to the right one of: avocado-d2c (生成 JSX), avocado-path-config (路径/配置), avocado-component-adapter (组件库适配：preset + 插件 + --trace-adapter 调试), avocado-visual-diff (网页 vs 设计稿 PNG 对比定位 DOM 差异，生成→对比→修复闭环). Also points to companion CLI antd (查询组件库 Props/demo/doc) when the question is about antd component library. If the user's intent is already specific (e.g. explicit \"转 JSX\" / \"改 preset\"), let the corresponding sub-skill trigger directly instead of this router."
 ---
 
 # avocado-router
@@ -43,8 +43,9 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 | "preset 放哪" / "找不到资源" / "改输出目录" | `avocado-path-config` |
 | "加组件" / "antd.yaml" / "leaf 字段" / "blockNameMatch" / "写插件" | `avocado-component-adapter` |
 | "为什么没识别" / "trace 调试" / "--trace-adapter" / "识别率低" | `avocado-component-adapter` |
+| "对比网页和设计稿" / "还原度检查" / "差异在哪个 DOM" / "生成→对比→修复" | `avocado-visual-diff` |
 
-## 3 个子 skill 导航
+## 4 个子 skill 导航
 
 ### avocado-d2c — Figma URL → JSX 生成
 **核心职责**：把 Figma URL 转成 JSX + CSS（`avocado <url>` 主命令）。
@@ -74,6 +75,14 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 - blockNameMatch / variant / dynamicProps 字段问题
 **关键约束**：ComponentMapping 9 字段（YAML camelCase ↔ Python snake_case）；blockNameMatch 数据驱动保护；leaf 字段判定（Button 不加，LabeledInput 加）；extractor 静默失败是合法降级。
 
+### avocado-visual-diff — 网页 vs 设计稿 PNG 对比（生成→对比→修复闭环）
+**核心职责**：Playwright 截图 + odiff 像素对比 + DOM 归因，输出差异区域及责任元素（selector / text / figmaId）。
+**典型场景**：
+- 用户给设计稿 PNG + 网页 URL（或本地服务），要"对比差异 / 看还原度"
+- 生成页面后验证还原度，修复后重跑对比（迭代闭环）
+- 报告 `summary[].selector` 直接定位到要改的 DOM 节点
+**关键约束**：stdout 是 JSON envelope（`regions` + `summary`）；设计稿 @1x 与截图 dpr 匹配；threshold 默认 0.05（0.1 会漏浅色差异）。
+
 ## 路由决策树
 
 ```
@@ -94,6 +103,9 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
    ├─ "加组件/antd.yaml/识别不到/leaf/variant/写插件"？
    │   → avocado-component-adapter
    │
+   ├─ "对比/还原度/差异 DOM/网页和设计稿"？
+   │   → avocado-visual-diff
+   │
    ├─ "组件库组件怎么用 / Props / demo / 项目里用了哪些组件"？
    │   → 直接查组件库官方文档；avocado 只负责 Figma → 代码映射
    │
@@ -110,12 +122,22 @@ avocado "<figma-url>" -o /tmp/out.jsx       # 单页 d2c
 1. **avocado-component-adapter** → 编辑 antd.yaml + 加 extractor / 写插件
 2. **avocado-d2c** → 单页生成验证
 
+### 场景 C：生成 → 对比 → 修复闭环（视觉还原）
+1. **avocado-d2c** → 生成 JSX（建议 `--figma-id` 便于归因回 Figma 节点）
+2. **avocado-visual-diff** → 起本地服务，设计稿 PNG vs 页面 URL 对比，读 `summary` 定位差异 DOM
+3. 修复 → 重跑 **avocado-visual-diff** 验证到 `match: true`
+
 ### 场景 C：用户 pip install 后跑不起来
 1. **avocado-path-config** → 检查 4 层查找
 2. 若路径正常但仍报错 → 看 envelope error code（详见 `avocado schema`）
 
 ### 场景 D：查 组件库 Props / 示例
 用户问"组件库 Button 有哪些 Props" / "LabeledInput 怎么用" / "项目里用了哪些 组件库组件" → **不要用 avocado skill**：avocado 只做 Figma → 代码转换，不提供组件库文档。直接查阅组件库官方文档 / 源码。
+
+### 场景 E：生成 → 对比 → 修复闭环（视觉还原）
+1. **avocado-d2c** → 生成 JSX（建议 `--figma-id` 便于归因回 Figma 节点）
+2. **avocado-visual-diff** → 起本地服务，设计稿 PNG vs 页面 URL 对比，读 `summary` 定位差异 DOM
+3. 修复 → 重跑 **avocado-visual-diff** 验证到 `match: true`
 
 ## 共同约束（所有子 skill 都遵守）
 
