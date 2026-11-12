@@ -23,9 +23,12 @@ from avocado.generator.style_props import apply_style_prop_modes
 from avocado.generator.tailwind import apply_tailwind
 from avocado.model.scene_node import SceneNode
 from avocado.parser.component import ComponentMapping
+from avocado.parser.css_variable import collect_variables
 from avocado.parser.node_mapper import map_node
 from avocado.parser.passes import apply_parse_passes
+from avocado.parser.var_map import load_var_map
 from avocado.plugins.base import HookRegistry
+from avocado.plugins.stages import apply_css_var_hook
 
 _SPEC_HELP = "NAME=NODE_ID"
 
@@ -84,6 +87,9 @@ def run_responsive(
     offline: bool,
     human: bool,
     token_source: str | None,
+    css_vars: bool = False,
+    var_map_path: Path | None = None,
+    component_lib: str | None = None,
 ) -> None:
     """Build one tree per frame, merge, write and emit the envelope."""
     try:
@@ -111,6 +117,33 @@ def run_responsive(
     built: list[Frame] = []
     warnings: list[str] = []
     frame_meta: list[dict] = []
+    var_matched = 0
+    var_total = 0
+
+    # Resolve the var-map once (same precedence as the single-frame path:
+    # explicit --var-map > auto-load for --component-lib > empty fallback).
+    var_map: dict[str, str] = {}
+    if css_vars:
+        if var_map_path is not None and not var_map_path.exists():
+            emit_error("invalid_argument", f"--var-map file not found: {var_map_path}", exit_code=2)
+            return
+        var_map = load_var_map(var_map_path) if var_map_path else {}
+        if not var_map_path and component_lib:
+            from avocado.paths import resolve_var_map
+
+            auto = resolve_var_map(component_lib)
+            if auto.exists():
+                var_map = load_var_map(auto)
+                if not var_map:
+                    warnings.append(
+                        f"--component-lib {component_lib} var-map file parsed to empty ({auto}); "
+                        "all CSS variable references will use fallback values"
+                    )
+        if not var_map and not var_map_path and not component_lib:
+            warnings.append(
+                "--css-vars enabled but no --var-map given (and no --component-lib auto-load), "
+                "all CSS variable references will use fallback values"
+            )
 
     for name, node_id in frames_spec:
         ref = FigmaNodeRef(file_key=file_key, node_id=node_id)
@@ -154,6 +187,11 @@ def run_responsive(
             unwrap_single=True,
             gap_to_margin_enabled=False,
         )
+        if css_vars:
+            collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+            collection.variables = apply_css_var_hook(registry, collection.variables)
+            var_matched += collection.var_map_matched
+            var_total += collection.var_map_total
         apply_style_prop_modes(tree)
         apply_tailwind(tree)
 
@@ -174,6 +212,19 @@ def run_responsive(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(result.code, encoding="utf-8")
 
+    if css_vars and var_total:
+        if var_matched == 0:
+            warnings.append(
+                f"--var-map matched 0 / {var_total} variable bindings; output falls back to "
+                "fig-var-<short> names (check that the var-map was exported from this file)"
+            )
+        elif var_matched < var_total:
+            warnings.append(
+                f"--var-map matched {var_matched} / {var_total} variable bindings; "
+                f"{var_total - var_matched} fall back to fig-var-<short> "
+                "(the var-map may predate this file's variables)"
+            )
+
     data = {
         "output_path": str(output) if output else None,
         "output_type": "react",
@@ -186,14 +237,18 @@ def run_responsive(
             "shared_components": result.shared_components,
             "stats": result.stats,
         },
+        "var_map_applied": (
+            {"matched": var_matched, "total": var_total} if css_vars else None
+        ),
         "mode": {
             "format": "react",
             "css": css_form,
             "layout": layout,
-            "component_lib": None,
+            "component_lib": component_lib,
             "responsive": True,
             "strip_nodes": list(strip_nodes),
             "shared_min_nodes": shared_min_nodes,
+            "css_vars": css_vars,
         },
         "token_source": token_source,
         "warnings": warnings or None,

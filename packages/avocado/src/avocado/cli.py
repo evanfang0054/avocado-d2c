@@ -979,6 +979,9 @@ def main(
             depth=depth,
             offline=offline,
             human=human,
+            css_vars=css_vars,
+            var_map_path=var_map_path,
+            component_lib=component_lib,
             token_source=(
                 "cli_flag"
                 if token
