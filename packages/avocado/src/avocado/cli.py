@@ -34,21 +34,12 @@ from avocado.parser.component import load_mapping, load_preset
 from avocado.parser.css_variable import collect_variables
 from avocado.parser.inspect import collect_all_warnings, run_all_inspect_rules
 from avocado.parser.node_mapper import map_node
-from avocado.parser.optimize import (
-    apply_auto_group_variance,
-    apply_semantic_tags,
-    gap_to_margin,
-    promote_inherited_styles,
-    reround_class_map,
-    reround_styles,
-    strip_default_styles,
-    unwrap_single_child,
-)
+from avocado.parser.optimize import reround_class_map, reround_styles
+from avocado.parser.passes import apply_parse_passes
 from avocado.parser.var_map import load_var_map
 from avocado.plugins.base import build_registry, default_plugin_dirs
 from avocado.plugins.stages import (
     apply_css_var_hook,
-    apply_node_hooks,
     apply_template_hook,
     collect_draft_warnings,
 )
@@ -470,6 +461,38 @@ def _augment_plugin_matches(tree: TreeNode) -> None:
     "comma-separated subset filters (preset/extractor/hook). "
     "Adds data.trace to the envelope: preset match details, extractor outputs, plugin hook stats.",
 )
+@click.option(
+    "--responsive",
+    "responsive_frames",
+    multiple=True,
+    metavar="NAME=NODE_ID",
+    help="Merge several design frames (one per breakpoint) into a single React module. "
+    "Repeat once per frame, e.g. --responsive mobile=1:2 --responsive desktop=1:3. "
+    "Requires --format react --css tailwind and -o. Breakpoints are derived from frame widths.",
+)
+@click.option(
+    "--strip-nodes",
+    "strip_nodes",
+    multiple=True,
+    metavar="TEXT",
+    help="With --responsive: drop nodes whose layer name contains TEXT (case-insensitive). "
+    "Handy for design-canvas chrome (status bars, selection frames). Repeatable.",
+)
+@click.option(
+    "--shared-min-nodes",
+    "shared_min_nodes",
+    type=int,
+    default=8,
+    show_default=True,
+    help="With --responsive: minimum subtree size to extract as a shared component.",
+)
+@click.option(
+    "--component-name",
+    "component_name",
+    default=None,
+    help="With --responsive: name of the generated page component "
+    "(default: derived from the first frame's layer name).",
+)
 def main(
     url: str,
     output: Path | None,
@@ -501,6 +524,10 @@ def main(
     html_fragment: bool = False,
     preview_centered: bool = False,
     trace_adapter: str | None = None,
+    responsive_frames: tuple[str, ...] = (),
+    strip_nodes: tuple[str, ...] = (),
+    shared_min_nodes: int = 8,
+    component_name: str | None = None,
 ) -> None:
     """Convert a Figma node URL to JSX code.
 
@@ -916,6 +943,54 @@ def main(
         )
         return
 
+    # ── multi-frame responsive merge (--responsive) ──
+    # Isolated branch: each frame is built with the same pass helpers as the
+    # single-frame path, then folded into one React module. The positional URL
+    # only supplies the file key; frames come from --responsive NAME=NODE_ID.
+    if responsive_frames:
+        if output is None and not human:
+            emit_error(
+                "invalid_argument",
+                "--responsive requires -o <file> in envelope mode "
+                "(pass --human to print the merged module to stdout)",
+                exit_code=2,
+            )
+            return
+        os.environ["AVOCADO_COMPONENT_MODE"] = (
+            "1" if (components is not None or component_lib is not None) else "0"
+        )
+        from avocado.commands.responsive import run_responsive
+        from avocado.paths import resolve_token
+
+        run_responsive(
+            url=url,
+            file_key=ref.file_key,
+            specs=responsive_frames,
+            client=client,
+            mapping=component_mapping,
+            registry=build_registry(*default_plugin_dirs()),
+            output=output,
+            output_format=output_format,
+            css_form=css_form,
+            layout=layout,
+            strip_nodes=strip_nodes,
+            shared_min_nodes=shared_min_nodes,
+            component_name=component_name,
+            depth=depth,
+            offline=offline,
+            human=human,
+            token_source=(
+                "cli_flag"
+                if token
+                else (
+                    "env_var"
+                    if os.environ.get("FIGMA_TOKEN")
+                    else ("config_file" if resolve_token(token) else "none")
+                )
+            ),
+        )
+        return
+
     try:
         doc_json = client.get_node(ref, depth=depth)
     except FigmaError as e:
@@ -1013,50 +1088,17 @@ def main(
     )
 
     # ── post-parse optimization passes (pre-plugin) ──
-    # Order matters:
-    # 1. auto_group_variance — orient ambiguous containers first so
-    # subsequent structural passes see a stable flex direction.
-    # 2. inherit_promote — lift common inherited props before
-    # strip_defaults touches them.
-    # 3. strip_defaults — drop defaults now that inherit-promote
-    # has consolidated values.
-    # 4. unwrap_single_child — collapse wrappers after style is settled.
-    # 5. gap_to_margin — last; depends on final flex-direction.
-    if auto_group_variance_flag:
-        apply_auto_group_variance(tree)
-    if inherit_promote_flag:
-        promote_inherited_styles(tree)
-    if strip_defaults_flag:
-        strip_default_styles(tree)
-    # FIX: run name-based component recognition (modify_json_schema) BEFORE
-    # unwrap_single_child. unwrap merges single-child wrappers into their
-    # child; if the wrapper's Figma layer name matches a preset component
-    # (e.g. "Body" → <Text>), unwrapping it would delete a component the
-    # plugin would have recognized. Marking components first lets unwrap's
-    # is_component guard keep them.
-    if registry.has("modify_json_schema"):
-        tree = registry.call("modify_json_schema", None, tree)
-    if unwrap_single_flag:
-        tree = unwrap_single_child(tree)
-    if gap_to_margin_flag:
-        gap_to_margin(tree)
-
-    # 6. semantic_tags — rewrite tag_name for landmark nodes
-    # (header/nav/main/footer/aside/article/section). Runs LAST
-    # because it only touches tag_name, never style/layout — no
-    # risk of breaking earlier passes. Zero visual impact (CSS
-    # treats <header> same as <div>), but improves SEO/a11y/JDX
-    # readability. Conservative: skips component/img/text nodes.
-    # UA-styled content tags (h1-h6/p/ul/li/button) are only emitted for
-    # tailwind (preflight resets them); inline/class keep them as div since
-    # no reset would be injected (zero-visual guarantee, #28/#30).
-    apply_semantic_tags(tree, css_form=css_form)
-
-    # Plugin loading moved BEFORE map_node (see above). modify_json_schema
-    # already ran before unwrap (component nodes are then protected from
-    # merging); per-node plugins (modify_style / modify_props) run here on the
-    # fully-built tree.
-    apply_node_hooks(registry, tree)
+    # Order is defined once in parser/passes.py (shared with --responsive).
+    tree = apply_parse_passes(
+        tree,
+        registry=registry,
+        css_form=css_form,
+        auto_group_variance=auto_group_variance_flag,
+        inherit_promote=inherit_promote_flag,
+        strip_defaults=strip_defaults_flag,
+        unwrap_single=unwrap_single_flag,
+        gap_to_margin_enabled=gap_to_margin_flag,
+    )
 
     # ── CSS variable replacement ──
     css_collection = None  # set when css_vars=True; surfaced in envelope
