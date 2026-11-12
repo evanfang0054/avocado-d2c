@@ -144,3 +144,20 @@ def test_leaf_and_leaf_extras_fields_parse() -> None:
     leaf_entries = [m for m in entries if m.leaf]
     # antd.yaml example marks several leaf components (Input, Checkbox, ...)
     assert leaf_entries, "antd.yaml should declare at least one leaf component"
+
+
+def test_style_mode_defaults_and_types() -> None:
+    """New style-emission fields default to inline and parse as plain types.
+
+    Bundled presets don't use them yet, so this pins backward compatibility:
+    every existing entry must keep the old "keep style inline" behavior.
+    """
+    from avocado.parser.component import STYLE_MODES
+
+    entries = load_preset("antd")
+    assert entries
+    for m in entries:
+        assert m.style_mode in STYLE_MODES
+        assert isinstance(m.style_props, dict)
+        assert isinstance(m.style_drop, tuple)
+    assert all(m.style_mode == "inline" for m in entries)

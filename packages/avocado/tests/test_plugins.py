@@ -274,3 +274,165 @@ def test_plugin_print_redirected_multi_hooks(capsys) -> None:
     assert "hook-b" not in stdout
     assert "hook-a" in stderr
     assert "hook-b" in stderr
+
+
+# ── Hook execution stages (plugins/stages.py) ──
+#
+# Only modify_json_schema / modify_style used to have call sites. These tests
+# pin the four previously-dead hooks to a real execution path.
+
+
+def _registry_with(plugin: Plugin) -> HookRegistry:
+    reg = HookRegistry()
+    reg.register(plugin)
+    return reg
+
+
+def test_apply_node_hooks_runs_modify_props() -> None:
+    from avocado.plugins.stages import apply_node_hooks
+
+    class P(Plugin):
+        name = "props"
+
+        @hook("modify_props")
+        def m(self, node, props):
+            return {**props, "aria-label": node.name}
+
+    node = TreeNode(id="0", name="close", source_type="INSTANCE")
+    apply_node_hooks(_registry_with(P()), node)
+    assert node.props["aria-label"] == "close"
+
+
+def test_apply_node_hooks_style_before_props() -> None:
+    """modify_props can read the style produced by modify_style."""
+    from avocado.plugins.stages import apply_node_hooks
+
+    class P(Plugin):
+        name = "chain"
+
+        @hook("modify_style")
+        def s(self, node, style):
+            return {**style, "color": "#333333"}
+
+        @hook("modify_props")
+        def p(self, node, props):
+            return {**props, "color": node.style.get("color")}
+
+    node = TreeNode(id="0", name="n", source_type="TEXT")
+    apply_node_hooks(_registry_with(P()), node)
+    assert node.props["color"] == "#333333"
+
+
+def test_apply_node_hooks_walks_children() -> None:
+    from avocado.plugins.stages import apply_node_hooks
+
+    class P(Plugin):
+        name = "props"
+
+        @hook("modify_props")
+        def m(self, node, props):
+            return {**props, "data-name": node.name}
+
+    child = TreeNode(id="1", name="c", source_type="FRAME")
+    root = TreeNode(id="0", name="r", source_type="FRAME", children=[child])
+    apply_node_hooks(_registry_with(P()), root)
+    assert root.props["data-name"] == "r"
+    assert child.props["data-name"] == "c"
+
+
+def test_apply_node_hooks_ignores_non_dict_return() -> None:
+    from avocado.plugins.stages import apply_node_hooks
+
+    class P(Plugin):
+        name = "bad"
+
+        @hook("modify_props")
+        def m(self, node, props):
+            return "oops"
+
+    node = TreeNode(id="0", name="n", source_type="FRAME", props={"keep": 1})
+    apply_node_hooks(_registry_with(P()), node)
+    assert node.props == {"keep": 1}
+
+
+def test_apply_css_var_hook_rewrites_table() -> None:
+    from avocado.plugins.stages import apply_css_var_hook
+
+    class P(Plugin):
+        name = "vars"
+
+        @hook("modify_css_var")
+        def m(self, variables):
+            return {f"--brand-{k}": v for k, v in variables.items()}
+
+    result = apply_css_var_hook(_registry_with(P()), {"color": "#fff"})
+    assert result == {"--brand-color": "#fff"}
+
+
+def test_apply_template_hook_rewrites_code() -> None:
+    from avocado.plugins.stages import apply_template_hook
+
+    class P(Plugin):
+        name = "tpl"
+
+        @hook("generate_template")
+        def m(self, root, code):
+            return code.replace("data-figma-id", "data-fid")
+
+    tree = TreeNode(id="0", name="n", source_type="FRAME")
+    assert apply_template_hook(_registry_with(P()), tree, 'x data-figma-id="1"') == 'x data-fid="1"'
+
+
+def test_apply_template_hook_ignores_non_str_return() -> None:
+    from avocado.plugins.stages import apply_template_hook
+
+    class P(Plugin):
+        name = "tpl"
+
+        @hook("generate_template")
+        def m(self, root, code):
+            return None
+
+    tree = TreeNode(id="0", name="n", source_type="FRAME")
+    assert apply_template_hook(_registry_with(P()), tree, "<div />") == "<div />"
+
+
+def test_collect_draft_warnings_attaches_entries() -> None:
+    from avocado.plugins.stages import collect_draft_warnings
+
+    class P(Plugin):
+        name = "inspect"
+
+        @hook("inspect_draft")
+        def m(self, root):
+            return [
+                {"severity": "warning", "code": "px-lock", "message": "pixel-locked box"},
+                {"code": "no-message"},  # malformed → skipped
+                "not-a-dict",  # malformed → skipped
+            ]
+
+    tree = TreeNode(id="0", name="n", source_type="FRAME")
+    collect_draft_warnings(_registry_with(P()), tree)
+    assert tree.inspect == [{"severity": "warning", "code": "px-lock", "message": "pixel-locked box"}]
+
+
+def test_every_hook_has_a_call_site() -> None:
+    """Guard against a documented hook silently going dead again.
+
+    A hook may live only in plugins/base.py (the registry) if nothing calls
+    it — exactly the bug this PR fixes for four hooks.
+    """
+    import avocado
+
+    src_root = Path(avocado.__file__).parent
+    sources = {
+        p: p.read_text(encoding="utf-8")
+        for p in src_root.rglob("*.py")
+        if p.name != "base.py"
+    }
+    missing = [
+        h
+        for h in HOOK_NAMES
+        if not any(f'"{h}"' in text or f"'{h}'" in text for text in sources.values())
+    ]
+    assert not missing, f"hooks with no call site outside plugins/base.py: {missing}"

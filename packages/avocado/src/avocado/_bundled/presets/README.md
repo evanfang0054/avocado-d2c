@@ -52,6 +52,52 @@ avocado URL --layout absolute --component-lib antd -o out.jsx
 
 3. Use it: `avocado URL --component-lib <libname>`.
 
+## Style emission (`styleMode` / `styleProps` / `dropStyle`)
+
+By default a recognized component keeps its whole Figma style as an inline
+`style={{...}}` prop. That is the safe default (a `className` is *appended* and
+stacks with the library's internal padding/sizing), but it produces code nobody
+would hand-write: `<Text style={{width: "70px", height: "22px", fontSize: "14px"}}>`.
+
+`styleMode` lets a preset declare how its components actually take styling:
+
+```yaml
+- name: "Text"
+  component: "Text"
+  package: "@your-org/your-lib"
+  styleMode: props                 # inline (default) | className | props
+  styleProps:                      # CSS property → component prop
+    font-size:                     # long form: value map (14px → size="sm")
+      prop: size
+      values: { "12": xs, "14": sm, "16": md }
+    color: color                   # shorthand: raw value → same-named prop
+  dropStyle: [width, height, flex-shrink]   # pure Figma geometry noise
+
+- name: "Image"
+  component: "Image"
+  package: "@your-org/your-lib"
+  styleMode: props
+  styleProps:
+    width: width                   # "400px" → width={400}
+    height: height
+  dropStyle: [display, flex-shrink]
+```
+
+| `styleMode` | Behavior | When to use |
+| --- | --- | --- |
+| `inline` (default) | Keep `style={{...}}` unchanged | Any component whose library already owns padding/sizing |
+| `className` | Convert style to Tailwind classes | Wrapper/layout components with no internal styling |
+| `props` | Move mapped style keys into props, drop `dropStyle`, keep misses inline | Typography/image components driven by props |
+
+Rules for `props` mode (all chosen to protect fidelity):
+
+- a **value-map miss keeps the CSS property inline** — a design using `17px`
+  never silently becomes `size="default"`;
+- an existing prop (from `props:` or `variantProperties`) wins and the
+  duplicate CSS property is dropped, so inline-style precedence cannot
+  override the prop;
+- `dropStyle` keys are removed unconditionally.
+
 ## Matching precedence
 
 When multiple entries match a node:

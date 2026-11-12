@@ -71,6 +71,25 @@ class ComponentMapping:
     # does NOT render itself (helper text, error message, ...). They are kept
     # as siblings of the leaf node instead of being dropped with children.
     leaf_extras: tuple[str, ...] = ()
+    # styleMode (YAML: styleMode): how to emit this component's CSS.
+    #   "inline"    — default. Keep style={{...}}; appending tailwind classes
+    #                 would stack with the library's internal padding/sizing
+    #                 (issue #35).
+    #   "className" — convert to tailwind classes. Only safe for components
+    #                 with no internal layout of their own.
+    #   "props"     — move style into component props via style_props
+    #                 (e.g. fontSize → size, width → width for a props-driven
+    #                 typography / image component).
+    style_mode: str = "inline"
+    # styleProps (YAML: styleProps): {css-prop: prop-name} shorthand, or
+    # {css-prop: {prop: name, values: {figma-value: prop-value}}}.
+    style_props: dict = field(default_factory=dict)
+    # dropStyle (YAML: dropStyle): CSS properties that are pure Figma
+    # geometry noise for this component (elastic width/height on Text, ...).
+    style_drop: tuple[str, ...] = ()
+
+
+STYLE_MODES = ("inline", "className", "props")
 
 
 def load_mapping(path: Path | str | None) -> list[ComponentMapping]:
@@ -105,6 +124,12 @@ def load_mapping(path: Path | str | None) -> list[ComponentMapping]:
         raise ValueError(f"'components' must be a list, got {type(entries).__name__}")
     out: list[ComponentMapping] = []
     for e in entries:
+        style_mode = str(e.get("styleMode", "inline") or "inline")
+        if style_mode not in STYLE_MODES:
+            raise ValueError(
+                f"invalid styleMode {style_mode!r} for component {e.get('name', e.get('componentId'))!r}; "
+                f"expected one of {list(STYLE_MODES)}"
+            )
         out.append(
             ComponentMapping(
                 component=e.get("component", ""),
@@ -118,9 +143,48 @@ def load_mapping(path: Path | str | None) -> list[ComponentMapping]:
                 leaf=bool(e.get("leaf", False)),
                 block_name_match=bool(e.get("blockNameMatch", False)),
                 leaf_extras=tuple(str(x) for x in (e.get("leafExtras") or [])),
+                style_mode=style_mode,
+                style_props=_normalize_style_props(e.get("styleProps")),
+                style_drop=tuple(str(x) for x in (e.get("dropStyle") or [])),
             )
         )
     return out
+
+
+def _normalize_style_props(raw) -> dict:
+    """Normalize the styleProps table.
+
+    Accepts both the shorthand (``font-size: size``) and the long form
+    (``font-size: {prop: size, values: {"14": small}}``). A malformed entry
+    raises ``ValueError`` (cli.py turns it into ``invalid_argument``) so a
+    typo never silently degrades to the default "keep inline" behavior.
+    """
+    if not raw:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"styleProps must be a mapping, got {type(raw).__name__}")
+    out: dict = {}
+    for css_prop, spec in raw.items():
+        key = str(css_prop)
+        if isinstance(spec, str):
+            out[key] = {"prop": spec, "values": {}}
+        elif isinstance(spec, dict):
+            values = spec.get("values") or {}
+            if not isinstance(values, dict):
+                raise ValueError(f"styleProps[{key!r}].values must be a mapping")
+            prop_name = spec.get("prop") or _camel_case(key)
+            out[key] = {"prop": str(prop_name), "values": dict(values)}
+        else:
+            raise ValueError(
+                f"styleProps[{key!r}] must be a prop name or a mapping, got {type(spec).__name__}"
+            )
+    return out
+
+
+def _camel_case(css_prop: str) -> str:
+    """``font-size`` → ``fontSize`` (prop name default when omitted)."""
+    head, *rest = css_prop.split("-")
+    return head + "".join(part.capitalize() for part in rest)
 
 
 def _normalize_keyed(raw):
@@ -424,6 +488,18 @@ def _extractor_sample(extracted: dict) -> dict:
     return {}
 
 
+def apply_style_mode(tree: TreeNode, mapping: ComponentMapping) -> None:
+    """Copy a mapping's style-emission strategy onto a recognized node.
+
+    Public helper: ``apply_component`` uses it for INSTANCE recognition, and
+    name-recognizer plugins (which mark nodes *after* ``map_node``) use it so
+    plugin-recognized components get the same ``styleMode`` treatment.
+    """
+    tree.style_mode = mapping.style_mode
+    tree.style_props = dict(mapping.style_props)
+    tree.style_drop = tuple(mapping.style_drop)
+
+
 def apply_component(
     scene: SceneNode,
     tree: TreeNode,
@@ -456,6 +532,10 @@ def apply_component(
     tree.component_package = m.package
     # Merge in any preset props
     tree.props.update(m.props)
+    # Style emission strategy travels with the node until
+    # generator.style_props.apply_style_prop_modes / apply_tailwind run (the
+    # last style-touching steps), so earlier optimize passes still see the CSS.
+    apply_style_mode(tree, m)
 
     # variantProperties → props
     variant_prop_hits: list[dict] = []

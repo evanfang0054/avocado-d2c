@@ -27,6 +27,7 @@ from avocado.api.figma import (
 from avocado.envelope import emit_error, emit_ok
 from avocado.generator.codegen import render_jsx
 from avocado.generator.css_class import apply_css_class, render_css_block
+from avocado.generator.style_props import apply_style_prop_modes
 from avocado.model.scene_node import SceneNode
 from avocado.model.tree_node import TreeNode
 from avocado.parser.component import load_mapping, load_preset
@@ -45,6 +46,12 @@ from avocado.parser.optimize import (
 )
 from avocado.parser.var_map import load_var_map
 from avocado.plugins.base import build_registry, default_plugin_dirs
+from avocado.plugins.stages import (
+    apply_css_var_hook,
+    apply_node_hooks,
+    apply_template_hook,
+    collect_draft_warnings,
+)
 
 
 def _sanitize_ansi(text: str) -> str:
@@ -1047,15 +1054,9 @@ def main(
 
     # Plugin loading moved BEFORE map_node (see above). modify_json_schema
     # already ran before unwrap (component nodes are then protected from
-    # merging); modify_style runs here on the fully-built tree.
-    if registry.has("modify_style"):
-        # Walk tree, apply modify_style per node
-        stack = [tree]
-        while stack:
-            n = stack.pop()
-            new_style = registry.call("modify_style", n, dict(n.style))
-            n.style = new_style
-            stack.extend(n.children)
+    # merging); per-node plugins (modify_style / modify_props) run here on the
+    # fully-built tree.
+    apply_node_hooks(registry, tree)
 
     # ── CSS variable replacement ──
     css_collection = None  # set when css_vars=True; surfaced in envelope
@@ -1127,9 +1128,21 @@ def main(
                 "All CSS variable references will use fig-var-<short> fallback names."
             )
 
+    # User plugins may rewrite the collected variable table (e.g. rename
+    # fig-var-<short> to a semantic convention before output).
+    if css_collection is not None:
+        css_collection.variables = apply_css_var_hook(registry, css_collection.variables)
+
     # Run all inspectDraft rules. Warnings attach to tree nodes in-place;
     # the return value is intentionally discarded (call sites use tree.inspect).
     run_all_inspect_rules(tree)
+    # User plugins can contribute their own inspect warnings (same entry shape).
+    collect_draft_warnings(registry, tree)
+
+    # Component style → props (preset styleMode: props). Runs before the --css
+    # branch: moving style into props is orthogonal to how leftover CSS is
+    # emitted, so inline/class/tailwind all get the same component props.
+    apply_style_prop_modes(tree)
 
     # Convert to Tailwind className form if requested.
     # css_form reflects the user's --css choice (defaults to tailwind).
@@ -1249,6 +1262,11 @@ def main(
 
         jsx = wrap_html_document(jsx, root=tree, preview_centered=preview_centered)
         html_wrapped = True
+
+    # Last chance for plugins to rewrite the delivered artifact (strip debug
+    # attributes, collapse boilerplate, inject imports, ...). Runs after
+    # beautify/HTML wrapping so the plugin sees exactly what is written out.
+    jsx = apply_template_hook(registry, tree, jsx)
 
     # Write artifacts to disk if -o was given. This happens in BOTH human and
     # envelope modes — the file is the source of truth for downstream tools
