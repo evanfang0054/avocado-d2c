@@ -131,6 +131,15 @@ _SPEC: dict = {
                     "help": "YAML file mapping VariableID → semantic CSS variable name",
                 },
                 {
+                    "name": ["--var-fallback"],
+                    "type": "choice",
+                    "choices": ["literal", "fig-var"],
+                    "default": "literal",
+                    "help": "What to emit for a bound variable missing from the var-map: "
+                    "'literal' keeps the concrete value (readable output), "
+                    "'fig-var' emits var(--fig-var-<short>, value) for adapter debugging",
+                },
+                {
                     "name": ["--precision"],
                     "type": "choice",
                     "choices": ["0", "1", "2", "unset"],

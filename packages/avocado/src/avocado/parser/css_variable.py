@@ -111,6 +111,7 @@ def collect_variables(
     tree: TreeNode,
     var_map: dict[str, str] | None = None,
     with_fallback: bool = True,
+    fallback_mode: str = "fig-var",
 ) -> CssVariableCollection:
     """Walk scene tree parallel to TreeNode tree, collect boundVariables.
 
@@ -121,14 +122,20 @@ def collect_variables(
         scene: root SceneNode
         tree: root TreeNode (will be mutated)
         var_map: VariableID → semantic CSS name (without `--`). If a binding's
-            id is in var_map, the emitted var() uses the semantic name;
-            otherwise falls back to `fig-var-<short>`.
+            id is in var_map, the emitted var() uses the semantic name.
         with_fallback: when True (default), emit `var(--x, fallback)` with
             the node's current value as fallback. When False, emit just
             `var(--x)`.
+        fallback_mode: what to emit for a binding whose id is NOT in var_map:
+            - ``"literal"`` — keep the node's concrete value (e.g. #faf8f7).
+              Readable output; the CLI defaults to this.
+            - ``"fig-var"`` — emit ``var(--fig-var-<short>, value)`` so the
+              unmapped binding stays visible for adapter debugging.
     """
+    if fallback_mode not in ("literal", "fig-var"):
+        raise ValueError(f"unknown fallback_mode {fallback_mode!r}")
     collection = CssVariableCollection()
-    _collect_recursive(scene, tree, collection, var_map or {}, with_fallback)
+    _collect_recursive(scene, tree, collection, var_map or {}, with_fallback, fallback_mode)
     return collection
 
 
@@ -138,21 +145,32 @@ def _var_ref(
     var_map: dict[str, str],
     with_fallback: bool,
     collection: CssVariableCollection,
+    fallback_mode: str = "fig-var",
 ) -> str:
     """Build a `var(--name, fallback)` string and register the variable."""
     matched = full_id in var_map
     collection.var_map_total += 1
     if matched:
         collection.var_map_matched += 1
-    name = var_map[full_id] if matched else _short_id(full_id)
-    # Always register short → full for collection completeness
+        name = var_map[full_id]
+        if with_fallback and fallback is not None:
+            return f"var(--{name}, {_format_value(fallback)})"
+        return f"var(--{name})"
+
+    # Unmapped binding: register it for diagnostics, then decide what the
+    # output should carry.
     short = _short_id(full_id)
     collection.full_ids[short] = full_id
-    if fallback is not None and short not in collection.variables:
-        collection.variables[short] = _format_value(fallback)
+    if fallback is not None:
+        if short not in collection.variables:
+            collection.variables[short] = _format_value(fallback)
+        if fallback_mode == "literal":
+            # Keep the concrete value — `fig-var-<short>` is unreadable and
+            # meaningless to the consumer.
+            return _format_value(fallback)
     if with_fallback and fallback is not None:
-        return f"var(--{name}, {_format_value(fallback)})"
-    return f"var(--{name})"
+        return f"var(--{short}, {_format_value(fallback)})"
+    return f"var(--{short})"
 
 
 def _collect_recursive(
@@ -161,6 +179,7 @@ def _collect_recursive(
     collection: CssVariableCollection,
     var_map: dict[str, str],
     with_fallback: bool,
+    fallback_mode: str = "fig-var",
 ) -> None:
     """Process one node, then recurse into matching children."""
     bv = scene.raw.get("boundVariables") if scene.raw else None
@@ -185,15 +204,16 @@ def _collect_recursive(
                         var_map,
                         with_fallback,
                         collection,
+                        fallback_mode,
                     )
                 else:
                     # Value mismatch — still register the var
-                    _var_ref(full_id, value, var_map, False, collection)
+                    _var_ref(full_id, value, var_map, False, collection, fallback_mode)
             else:
-                _var_ref(full_id, value, var_map, False, collection)
+                _var_ref(full_id, value, var_map, False, collection, fallback_mode)
 
     # ── paint-embedded boundVariables (fills/strokes color) ──
-    _collect_paint_bindings(scene, tree, collection, var_map, with_fallback)
+    _collect_paint_bindings(scene, tree, collection, var_map, with_fallback, fallback_mode)
 
     # Recurse into children — match by figma_id
     scene_children_by_id = {c.id: c for c in scene.children}
@@ -206,6 +226,7 @@ def _collect_recursive(
                 collection,
                 var_map,
                 with_fallback,
+                fallback_mode,
             )
 
 
@@ -215,6 +236,7 @@ def _collect_paint_bindings(
     collection: CssVariableCollection,
     var_map: dict[str, str],
     with_fallback: bool,
+    fallback_mode: str = "fig-var",
 ) -> None:
     """Scan fills/strokes paints for embedded boundVariables.color.
 
@@ -240,11 +262,12 @@ def _collect_paint_bindings(
                     var_map,
                     with_fallback,
                     collection,
+                    fallback_mode,
                 )
             else:
-                _var_ref(full_id, fallback, var_map, False, collection)
+                _var_ref(full_id, fallback, var_map, False, collection, fallback_mode)
         else:
-            _var_ref(full_id, fallback, var_map, False, collection)
+            _var_ref(full_id, fallback, var_map, False, collection, fallback_mode)
 
     # Strokes: register only (border is composite, don't replace)
     solid_strokes = [
@@ -258,4 +281,4 @@ def _collect_paint_bindings(
         if not full_id:
             continue
         fallback = paint_color_to_css(paint)
-        _var_ref(full_id, fallback, var_map, False, collection)
+        _var_ref(full_id, fallback, var_map, False, collection, fallback_mode)

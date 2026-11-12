@@ -345,6 +345,15 @@ def _augment_plugin_matches(tree: TreeNode) -> None:
     help="YAML file mapping VariableID → semantic CSS variable name. "
     "If omitted with --component-lib, auto-loads var-maps/<lib>.yaml.",
 )
+@click.option(
+    "--var-fallback",
+    type=click.Choice(["literal", "fig-var"], case_sensitive=False),
+    default="literal",
+    show_default=True,
+    help="What to emit for a bound variable that is missing from the var-map: "
+    "'literal' keeps the concrete value (readable output), "
+    "'fig-var' emits var(--fig-var-<short>, value) for adapter debugging.",
+)
 # ── optimization passes ──
 @click.option(
     "--precision",
@@ -509,6 +518,7 @@ def main(
     layout: str,
     css_vars: bool,
     var_map_path: Path | None,
+    var_fallback: str,
     precision: str,
     box_sizing: str,
     gap_to_margin_flag: bool,
@@ -981,6 +991,7 @@ def main(
             human=human,
             css_vars=css_vars,
             var_map_path=var_map_path,
+            var_fallback=var_fallback,
             component_lib=component_lib,
             token_source=(
                 "cli_flag"
@@ -1150,12 +1161,18 @@ def main(
                 "--css-vars enabled but no --var-map given (and no --component-lib auto-load), "
                 "all CSS variable references will use fallback values"
             )
-        css_collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+        css_collection = collect_variables(
+            scene,
+            tree,
+            var_map=var_map,
+            with_fallback=True,
+            fallback_mode=var_fallback,
+        )
         # Warn when --var-map was provided but matched zero bindings — the user
         # explicitly opted in but the Figma file has no usable boundVariables
         # (or the VariableIDs don't match the var-map keys). Without this
-        # warning the output silently uses fig-var-<short> names instead of
-        # the semantic names the user expected.
+        # warning the output silently degrades instead of using the semantic
+        # names the user expected.
         if css_collection.var_map_total > 0 and css_collection.var_map_matched == 0:
             _vm_src = (
                 str(var_map_path)
@@ -1164,13 +1181,17 @@ def main(
                     f"--component-lib {component_lib} auto-load" if component_lib else "(unknown)"
                 )
             )
+            _unmapped = (
+                "Unmatched variables keep their literal values."
+                if var_fallback == "literal"
+                else "Unmatched variables use fig-var-<short> fallback names."
+            )
             warnings.append(
                 f"--var-map loaded from {_vm_src} but matched 0 / "
                 f"{css_collection.var_map_total} bindings — possible causes: "
                 "(1) the Figma file uses Styles not Variables; "
                 "(2) var-map keys don't match this file's VariableIDs; "
-                "(3) --depth too low returned shallow boundVariables. "
-                "All CSS variable references will use fig-var-<short> fallback names."
+                f"(3) --depth too low returned shallow boundVariables. {_unmapped}"
             )
 
     # User plugins may rewrite the collected variable table (e.g. rename
@@ -1774,6 +1795,7 @@ def main(
             "component_lib": component_lib,
             # FIX: complete the key flags (mode fully reproduces the output conditions)
             "css_vars": css_vars,
+            "var_fallback": var_fallback,
             "precision": precision,
             "box_sizing": box_sizing,
             "figma_id": figma_id,

@@ -89,6 +89,7 @@ def run_responsive(
     token_source: str | None,
     css_vars: bool = False,
     var_map_path: Path | None = None,
+    var_fallback: str = "literal",
     component_lib: str | None = None,
 ) -> None:
     """Build one tree per frame, merge, write and emit the envelope."""
@@ -188,7 +189,13 @@ def run_responsive(
             gap_to_margin_enabled=False,
         )
         if css_vars:
-            collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+            collection = collect_variables(
+                scene,
+                tree,
+                var_map=var_map,
+                with_fallback=True,
+                fallback_mode=var_fallback,
+            )
             collection.variables = apply_css_var_hook(registry, collection.variables)
             var_matched += collection.var_map_matched
             var_total += collection.var_map_total
@@ -213,15 +220,20 @@ def run_responsive(
         output.write_text(result.code, encoding="utf-8")
 
     if css_vars and var_total:
+        _where = (
+            "keep their literal values"
+            if var_fallback == "literal"
+            else "fall back to fig-var-<short>"
+        )
         if var_matched == 0:
             warnings.append(
-                f"--var-map matched 0 / {var_total} variable bindings; output falls back to "
-                "fig-var-<short> names (check that the var-map was exported from this file)"
+                f"--var-map matched 0 / {var_total} variable bindings; unmatched variables "
+                f"{_where} (check that the var-map was exported from this file)"
             )
         elif var_matched < var_total:
             warnings.append(
                 f"--var-map matched {var_matched} / {var_total} variable bindings; "
-                f"{var_total - var_matched} fall back to fig-var-<short> "
+                f"{var_total - var_matched} {_where} "
                 "(the var-map may predate this file's variables)"
             )
 
@@ -249,6 +261,7 @@ def run_responsive(
             "strip_nodes": list(strip_nodes),
             "shared_min_nodes": shared_min_nodes,
             "css_vars": css_vars,
+            "var_fallback": var_fallback,
         },
         "token_source": token_source,
         "warnings": warnings or None,

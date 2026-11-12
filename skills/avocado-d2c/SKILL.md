@@ -147,6 +147,7 @@ d["hint"]                                # 提示去掉 --dry-run 真跑
 | **HTML 片段模式** | `--html-fragment`（退回裸 `<div>` 片段，默认 --format html 输出完整文档） |
 | **清小数像素** | `--precision 0`（默认 `2` 保留 2 位小数；`0` 全取整到整数，平均偏移仅 ~0.08px；`1` 取整到 1 位；`unset` 用 Figma 原始 float32 值如 `99.66970825195312`） |
 | 人类可读输出（彩色 stderr） | `--human` (**破坏 JSON 契约**：d2c stdout 输出 JSX 文本；schema/paths/init --human 输出 Markdown/彩色文本到 stdout，AI agent 一律不用 --human) |
+| 未映射变量怎么输出 | `--var-fallback literal`（默认，保留字面值，不产生 `fig-var-*`）/ `--var-fallback fig-var`（调试用，保留 `var(--fig-var-<short>, value)`） |
 | **多断点合并成一个组件** | `--responsive mobile=1:2 --responsive tablet=1:3 --responsive desktop=1:4 --format react -o page.tsx`（需 ≥2 个画板 + `--css tailwind`；断点名由 CLI 提供，阈值按画板宽度取中点；envelope 见 `data.responsive`） |
 | 合并时删设计稿 chrome | `--strip-nodes "Status Bar"`（按图层名包含匹配，可重复；状态栏/选中框等画布装饰） |
 | 控制共享组件抽取 | `--shared-min-nodes 8`（默认 8；跨画板内容完全相同且 ≥N 节点的子树抽成 `Shared*` 组件） |

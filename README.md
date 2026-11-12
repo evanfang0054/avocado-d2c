@@ -80,6 +80,7 @@ avocado "<任意画板链接>" \
 - 根节点的固定宽高会被去掉并补 `w-full`，否则移动端布局在宽视口里仍然是 390px
 - `--strip-nodes "Status Bar"` 按图层名删掉画布装饰（状态栏、选中框），可重复
 - `--shared-min-nodes 8` 控制共享组件的最小节点数；`data.responsive.shared_components` 列出抽出来的组件
+- `--css-vars` 开启变量替换；var-map 里没有的变量默认**保留字面值**（不再输出 `var(--fig-var-xxx)`），需要排查未映射绑定时加 `--var-fallback fig-var`
 - 只支持 `--format react --css tailwind`；合并结果会先过 tree-sitter 校验
 
 ### 离线加速
