@@ -416,11 +416,23 @@ def test_collect_draft_warnings_attaches_entries() -> None:
     assert tree.inspect == [{"severity": "warning", "code": "px-lock", "message": "pixel-locked box"}]
 
 
+_STAGE_FOR_HOOK = {
+    "modify_style": "apply_node_hooks",
+    "modify_props": "apply_node_hooks",
+    "modify_css_var": "apply_css_var_hook",
+    "generate_template": "apply_template_hook",
+    "inspect_draft": "collect_draft_warnings",
+    "modify_json_schema": None,  # called inline in parser/passes.py
+}
+
+
 def test_every_hook_has_a_call_site() -> None:
     """Guard against a documented hook silently going dead again.
 
-    A hook may live only in plugins/base.py (the registry) if nothing calls
-    it — exactly the bug this PR fixes for four hooks.
+    Deleting the stage call from the pipeline used to leave this test green,
+    because the hook name still appeared inside plugins/stages.py. The guard
+    now also requires each stage function to be *invoked* from outside
+    plugins/ (passes.py / cli.py / commands/).
     """
     import avocado
 
@@ -436,3 +448,13 @@ def test_every_hook_has_a_call_site() -> None:
         if not any(f'"{h}"' in text or f"'{h}'" in text for text in sources.values())
     ]
     assert not missing, f"hooks with no call site outside plugins/base.py: {missing}"
+
+    outside_plugins = {
+        path: text for path, text in sources.items() if "plugins" not in path.parts
+    }
+    dead_stages = [
+        stage
+        for stage in _STAGE_FOR_HOOK.values()
+        if stage and not any(f"{stage}(" in text for text in outside_plugins.values())
+    ]
+    assert not dead_stages, f"stage functions never invoked from outside plugins/: {dead_stages}"

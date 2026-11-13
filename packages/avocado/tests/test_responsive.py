@@ -145,3 +145,64 @@ def test_merge_reports_stats() -> None:
     assert result.stats["frames"] == 2
     assert result.stats["generated_lines"] == result.code.count("\n")
     assert result.stats["nodes_replaced_by_shared"] > 0
+
+
+def test_component_name_is_sanitized() -> None:
+    """`--component-name "my page"` must not emit `function my page()`."""
+    result = merge_frames([_frame(390), _frame(1440)], page_name="my page", min_shared_nodes=4)
+    assert "export default function MyPage()" in result.code
+    assert "function my page" not in result.code
+
+
+def test_component_name_cannot_inject_code() -> None:
+    result = merge_frames(
+        [_frame(390), _frame(1440)], page_name="X(){ } //", min_shared_nodes=4
+    )
+    assert "export default function X" in result.code
+    assert "//" not in result.code.split("export default function")[1].split("\n")[0]
+
+
+def test_duplicate_layout_names_are_disambiguated() -> None:
+    """Labels that normalize to the same identifier must not collide."""
+    a = _frame(390)
+    b = _frame(1440)
+    a.name = "mobile"
+    b.name = "Mobile"
+    result = merge_frames([a, b], page_name="Page", min_shared_nodes=4)
+    assert result.code.count("function PageMobileLayout(") == 1
+    assert result.code.count("function PageMobile2Layout(") == 1
+
+
+def test_breakpoints_stay_strictly_increasing_for_close_frames() -> None:
+    """Sub-pixel frames would collapse two breakpoints onto the same min-width."""
+    frames = []
+    for width, name in ((1.0, "a"), (1.2, "b"), (1.4, "c")):
+        frame = _frame(width, extra=_card(f"only-{name}"))
+        frame.name = name
+        frames.append(frame)
+    result = merge_frames(frames, page_name="Page", min_shared_nodes=4)
+    widths = [b["minWidth"] for b in result.breakpoints]
+    assert widths == sorted(set(widths)), widths
+    assert len(widths) == 3
+
+
+def test_normalize_root_keeps_fraction_utilities() -> None:
+    node = TreeNode(
+        id="r",
+        name="Screen",
+        source_type="FRAME",
+        props={"className": "w-1/2 h-1/2 w-[390px] bg-white"},
+    )
+    normalize_root(node)
+    assert "w-1/2" in node.props["className"]
+    assert "h-1/2" in node.props["className"]
+    assert "w-[390px]" not in node.props["className"]
+    assert node.props["className"].count("w-full") == 1
+
+
+def test_normalize_root_does_not_duplicate_w_full() -> None:
+    node = TreeNode(
+        id="r", name="Screen", source_type="FRAME", props={"className": "w-full flex"}
+    )
+    normalize_root(node)
+    assert node.props["className"] == "w-full flex"

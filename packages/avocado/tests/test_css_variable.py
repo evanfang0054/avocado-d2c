@@ -472,8 +472,9 @@ def test_unmapped_binding_keeps_literal_value() -> None:
     assert tree.style.get("border-radius") == "8px"
     assert collection.var_map_total == 1
     assert collection.var_map_matched == 0
-    # Still registered for diagnostics (envelope / plugins), just not emitted.
-    assert collection.variables["fig-var-1-2"] == "8px"
+    # The fig-var name never reaches the output, so the emitted-CSS table
+    # (consumed by modify_css_var) stays empty.
+    assert collection.variables == {}
 
 
 def test_unmapped_binding_keeps_fig_var_when_requested() -> None:
@@ -484,13 +485,16 @@ def test_unmapped_binding_keeps_fig_var_when_requested() -> None:
 
 def test_mapped_binding_unaffected_by_fallback_mode() -> None:
     scene, tree = _bound_box("VariableID:abc/1:2")
-    collect_variables(
+    collection = collect_variables(
         scene,
         tree,
         var_map={"VariableID:abc/1:2": "brand-radius"},
         fallback_mode="literal",
     )
     assert tree.style.get("border-radius") == "var(--brand-radius, 8px)"
+    # Registered under the emitted name so plugins see the real CSS.
+    assert collection.variables == {"brand-radius": "8px"}
+    assert collection.full_ids == {"brand-radius": "VariableID:abc/1:2"}
 
 
 def test_unknown_fallback_mode_raises() -> None:

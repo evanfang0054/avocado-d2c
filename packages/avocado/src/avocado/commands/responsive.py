@@ -16,7 +16,14 @@ from pathlib import Path
 
 import click
 
-from avocado.api.figma import FigmaError, FigmaNodeRef
+from avocado.api.figma import (
+    FigmaAuthError,
+    FigmaCacheMissError,
+    FigmaError,
+    FigmaNodeRef,
+    FigmaNotFoundError,
+    FigmaRateLimitError,
+)
 from avocado.envelope import emit_error, emit_ok
 from avocado.generator.responsive import Frame, merge_frames
 from avocado.generator.style_props import apply_style_prop_modes
@@ -24,13 +31,26 @@ from avocado.generator.tailwind import apply_tailwind
 from avocado.model.scene_node import SceneNode
 from avocado.parser.component import ComponentMapping
 from avocado.parser.css_variable import collect_variables
+from avocado.parser.inspect import collect_all_warnings, run_all_inspect_rules
 from avocado.parser.node_mapper import map_node
+from avocado.parser.optimize import reround_styles
 from avocado.parser.passes import apply_parse_passes
 from avocado.parser.var_map import load_var_map
 from avocado.plugins.base import HookRegistry
 from avocado.plugins.stages import apply_css_var_hook
 
 _SPEC_HELP = "NAME=NODE_ID"
+
+
+def _fail(message: str, code: str, human: bool, *, exit_code: int | None = None) -> None:
+    """Report an error in the caller's mode (human stderr vs JSON envelope)."""
+    if human:
+        click.echo(f"error: {message}", err=True)
+        sys.exit(exit_code or 1)
+    if exit_code is None:
+        emit_error(code, message)
+    else:
+        emit_error(code, message, exit_code=exit_code)
 
 
 def parse_frame_specs(specs: tuple[str, ...]) -> list[tuple[str, str]]:
@@ -50,6 +70,18 @@ def parse_frame_specs(specs: tuple[str, ...]) -> list[tuple[str, str]]:
     if len(out) < 2:
         raise ValueError("--responsive needs at least two NAME=NODE_ID pairs")
     return out
+
+
+def _inspect_summary(entries: list[dict]) -> dict:
+    """Aggregate inspect warnings by code/severity (mirrors the single-frame shape)."""
+    by_code: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for entry in entries:
+        code = str(entry.get("code", "?"))
+        by_code[code] = by_code.get(code, 0) + 1
+        severity = str(entry.get("severity", "info"))
+        by_severity[severity] = by_severity.get(severity, 0) + 1
+    return {"total": len(entries), "by_code": by_code, "by_severity": by_severity}
 
 
 def _strip_by_name(tree, patterns: list[str]) -> None:
@@ -91,26 +123,38 @@ def run_responsive(
     var_map_path: Path | None = None,
     var_fallback: str = "literal",
     component_lib: str | None = None,
+    precision: str = "2",
+    beautify_flag: bool = True,
+    figma_id: bool = False,
+    auto_group_variance: bool = False,
+    gap_to_margin: bool = False,
+    box_sizing: str = "content-box",
+    inspect: bool = False,
+    summary: bool = False,
+    trace_adapter: str | None = None,
+    inspect_warnings: list[dict] | None = None,
 ) -> None:
     """Build one tree per frame, merge, write and emit the envelope."""
     try:
         frames_spec = parse_frame_specs(specs)
     except ValueError as e:
-        emit_error("invalid_argument", str(e), exit_code=2)
+        _fail(str(e), "invalid_argument", human, exit_code=2)
         return
 
     if output_format.lower() != "react":
-        emit_error(
-            "invalid_argument",
+        _fail(
             "--responsive requires --format react (the merged module is React)",
+            "invalid_argument",
+            human,
             exit_code=2,
         )
         return
     if css_form.lower() != "tailwind":
-        emit_error(
-            "invalid_argument",
+        _fail(
             "--responsive requires --css tailwind (shared subtrees are matched on "
             "className; other CSS forms are not supported yet)",
+            "invalid_argument",
+            human,
             exit_code=2,
         )
         return
@@ -121,13 +165,33 @@ def run_responsive(
     var_matched = 0
     var_total = 0
 
+    # Flags accepted by the shared CLI surface but not implemented for the
+    # merged output: say so instead of silently doing nothing.
+    for flag, active in (
+        ("--box-sizing", box_sizing.lower() != "content-box"),
+        ("--summary", summary),
+        ("--trace-adapter", trace_adapter is not None),
+    ):
+        if active:
+            warnings.append(f"{flag} is ignored with --responsive")
+
     # Resolve the var-map once (same precedence as the single-frame path:
     # explicit --var-map > auto-load for --component-lib > empty fallback).
     var_map: dict[str, str] = {}
-    if css_vars:
-        if var_map_path is not None and not var_map_path.exists():
-            emit_error("invalid_argument", f"--var-map file not found: {var_map_path}", exit_code=2)
+    if var_map_path is not None and not var_map_path.exists():
+        _fail(f"--var-map file not found: {var_map_path}", "invalid_argument", human, exit_code=2)
+        return
+    if var_map_path is not None:
+        import yaml as _yaml
+
+        try:
+            _vm_test = _yaml.safe_load(var_map_path.read_text(encoding="utf-8"))
+            if not isinstance(_vm_test, dict):
+                raise ValueError(f"top-level YAML is {type(_vm_test).__name__}, not a mapping")
+        except Exception as e:  # noqa: BLE001 — surface as invalid_argument
+            _fail(f"invalid YAML in --var-map: {e}", "invalid_argument", human, exit_code=2)
             return
+    if css_vars:
         var_map = load_var_map(var_map_path) if var_map_path else {}
         if not var_map_path and component_lib:
             from avocado.paths import resolve_var_map
@@ -151,14 +215,25 @@ def run_responsive(
         try:
             doc = client.get_node(ref, depth=depth)
         except FigmaError as e:
-            emit_error("figma_not_found", f"frame {name!r} ({node_id}): {e}")
+            if isinstance(e, FigmaAuthError):
+                code = "figma_auth_failed"
+            elif isinstance(e, FigmaNotFoundError):
+                code = "figma_node_not_found"
+            elif isinstance(e, FigmaCacheMissError):
+                code = "figma_cache_miss"
+            elif isinstance(e, FigmaRateLimitError):
+                code = "figma_rate_limited"
+            else:
+                code = "figma_not_found"
+            _fail(f"frame {name!r} ({node_id}): {e}", code, human)
             return
 
         scene = SceneNode.from_dict(doc)
         if scene is None or scene.box is None:
-            emit_error(
-                "figma_node_not_found",
+            _fail(
                 f"frame {name!r} ({node_id}) has no bounding box; is it a FRAME/SECTION?",
+                "figma_node_not_found",
+                human,
                 exit_code=2,
             )
             return
@@ -182,12 +257,19 @@ def run_responsive(
             tree,
             registry=registry,
             css_form=css_form,
-            auto_group_variance=False,
+            auto_group_variance=auto_group_variance,
             inherit_promote=True,
             strip_defaults=True,
             unwrap_single=True,
-            gap_to_margin_enabled=False,
+            gap_to_margin_enabled=gap_to_margin,
         )
+        run_all_inspect_rules(tree)
+        if inspect:
+            inspect_warnings = inspect_warnings if inspect_warnings is not None else []
+            for entry in collect_all_warnings(tree):
+                entry = dict(entry)
+                entry.setdefault("frame", name)
+                inspect_warnings.append(entry)
         if css_vars:
             collection = collect_variables(
                 scene,
@@ -201,6 +283,17 @@ def run_responsive(
             var_total += collection.var_map_total
         apply_style_prop_modes(tree)
         apply_tailwind(tree)
+        if precision.lower() != "unset":
+            reround_styles(tree, int(precision))
+        # `_image_error` is a diagnostic prop (mirrors the single-frame path);
+        # never let it reach the merged module.
+        stack = [tree]
+        while stack:
+            node = stack.pop()
+            image_error = node.props.pop("_image_error", None)
+            if image_error:
+                warnings.append(f"[{name}] {image_error}")
+            stack.extend(node.children)
 
         built.append(Frame(name=name, tree=tree, width=scene.box.width))
         frame_meta.append({"name": name, "node_id": node_id, "width": scene.box.width})
@@ -210,14 +303,28 @@ def run_responsive(
             built,
             page_name=component_name,
             min_shared_nodes=shared_min_nodes,
+            emit_figma_id=figma_id,
         )
     except ValueError as e:
-        emit_error("invalid_argument", str(e), exit_code=2)
+        _fail(str(e), "invalid_argument", human, exit_code=2)
         return
+
+    code = result.code
+    beautified = False
+    if beautify_flag:
+        try:
+            from avocado.api.jsx_beautify import JsxBeautifyError, beautify
+
+            code = beautify(code.rstrip()) + "\n"
+            beautified = True
+        except JsxBeautifyError as e:
+            warnings.append(f"beautify failed, using raw output: {e}")
+        except Exception as e:  # noqa: BLE001 — beautify must never break delivery
+            warnings.append(f"beautify failed, using raw output: {e}")
 
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(result.code, encoding="utf-8")
+        output.write_text(code, encoding="utf-8")
 
     if css_vars and var_total:
         _where = (
@@ -252,6 +359,11 @@ def run_responsive(
         "var_map_applied": (
             {"matched": var_matched, "total": var_total} if css_vars else None
         ),
+        "inspect": inspect_warnings or None,
+        "inspect_summary": (
+            _inspect_summary(inspect_warnings) if inspect_warnings else None
+        ),
+        "beautified": beautified,
         "mode": {
             "format": "react",
             "css": css_form,
@@ -262,18 +374,28 @@ def run_responsive(
             "shared_min_nodes": shared_min_nodes,
             "css_vars": css_vars,
             "var_fallback": var_fallback,
+            "precision": precision,
+            "figma_id": figma_id,
+            "has_output": output is not None,
+            "passes": {
+                "inherit_promote": True,
+                "strip_defaults": True,
+                "unwrap_single_child": True,
+                "gap_to_margin": gap_to_margin,
+                "auto_group_variance": auto_group_variance,
+            },
         },
         "token_source": token_source,
         "warnings": warnings or None,
-        "hint": (
+        "hints": [
             "merged module: one layout per frame + useResponsiveBreakpoint() + "
             "shared components for identical subtrees; wire data/state by replacing "
             "the literal text with props"
-        ),
+        ],
     }
 
     if human:
-        click.echo(result.code)
+        click.echo(code)
         if warnings:
             for w in warnings:
                 click.echo(f"warning: {w}", err=True)

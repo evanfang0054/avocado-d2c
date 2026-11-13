@@ -231,3 +231,60 @@ def test_apply_style_mode_helper_copies_fields() -> None:
     assert node.style_mode == "props"
     assert node.style_props == {"font-size": {"prop": "size", "values": {"14": "sm"}}}
     assert node.style_drop == ("width",)
+
+
+def test_value_map_reads_cssvar_fallback() -> None:
+    """With --css-vars the value can be var(--x, 14px); the fallback is the value."""
+    node = _node(
+        style={"font-size": "var(--text-size, 14px)"},
+        style_mode="props",
+        style_props={"font-size": {"prop": "size", "values": {"14": "sm"}}},
+    )
+    apply_style_props(node)
+    assert node.props["size"] == "sm"
+    assert "font-size" not in node.style
+
+
+def test_value_map_miss_on_cssvar_keeps_reference() -> None:
+    node = _node(
+        style={"font-size": "var(--text-size, 17px)"},
+        style_mode="props",
+        style_props={"font-size": {"prop": "size", "values": {"14": "sm"}}},
+    )
+    apply_style_props(node)
+    assert "size" not in node.props
+    assert node.style["font-size"] == "var(--text-size, 17px)"
+
+
+# ── validation ──
+
+
+def _preset(tmp_path, body: str):
+    p = tmp_path / "preset.yaml"
+    p.write_text("components:\n" + body)
+    return p
+
+
+def test_load_mapping_rejects_scalar_drop_style(tmp_path) -> None:
+    p = _preset(tmp_path, "  - name: Text\n    component: Text\n    dropStyle: width\n")
+    with pytest.raises(ValueError, match="dropStyle"):
+        load_mapping(p)
+
+
+def test_load_mapping_rejects_unknown_style_prop_key(tmp_path) -> None:
+    p = _preset(
+        tmp_path,
+        "  - name: Text\n    component: Text\n    styleProps:\n      font-size:\n"
+        "        propp: size\n",
+    )
+    with pytest.raises(ValueError, match="unknown key"):
+        load_mapping(p)
+
+
+def test_load_mapping_rejects_reserved_style_prop(tmp_path) -> None:
+    p = _preset(
+        tmp_path,
+        "  - name: Text\n    component: Text\n    styleProps:\n      color: className\n",
+    )
+    with pytest.raises(ValueError, match="reserved prop"):
+        load_mapping(p)

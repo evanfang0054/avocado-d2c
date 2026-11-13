@@ -156,7 +156,7 @@ d["hint"]                                # 提示去掉 --dry-run 真跑
 ## 互斥与优先级（务必遵守）
 
 - `--components <yaml>` 与 `--component-lib <name>` **互斥**，前者优先；错误在请求 Figma API 之前快速失败（Click `type=Path` 用 `exists=False`，业务内手动校验）
-- `--var-map <path>` 显式 > `--component-lib` 自动走 4 层查找 > 空映射 fallback `fig-var-<short>`
+- `--var-map <path>` 显式 > `--component-lib` 自动走 4 层查找 > 空映射时按 `--var-fallback` 处理（默认 `literal` 保留字面值；`fig-var` 才输出 `var(--fig-var-<short>, value)`）
 - `--format inline/tailwind` 已**废弃**（保留兼容，加 deprecation warning），新代码用 `--css inline|tailwind|class`。`mode.format` 显示映射后值，`mode.format_raw` 保留原始输入
 - `--css class` 必须在所有 style pass 之后；rerounded 后对 class_map 再跑一次（不要改顺序）
 - `-o /dev/stdout` / `-o -` 被禁止（JSX + envelope 双重写 stdout 会破坏 JSON 契约）

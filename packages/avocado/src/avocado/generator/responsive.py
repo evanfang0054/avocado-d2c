@@ -95,11 +95,12 @@ def _strip_fixed_size_classes(className: str) -> str:
 
     global _ROOT_SIZE_CLASS_RE
     if _ROOT_SIZE_CLASS_RE is None:
-        # ``(?![\w-])`` instead of ``\b``: a class ending in ``]`` has no word
+        # ``(?![\w/-])`` instead of ``\b``: a class ending in ``]`` has no word
         # boundary (``]`` and whitespace are both non-word), so ``\b`` would
         # silently match nothing for arbitrary values like ``w-[390px]``.
+        # ``/`` is excluded too so fraction utilities (``w-1/2``) are untouched.
         _ROOT_SIZE_CLASS_RE = re.compile(
-            r"(?:^|\s)(?:min-|max-)?(?:w|h)-(?:\[[^\]]+\]|\d+(?:\.\d+)?)(?![\w-])"
+            r"(?:^|\s)(?:min-|max-)?(?:w|h)-(?:\[[^\]]+\]|\d+(?:\.\d+)?)(?![\w/-])"
         )
     cleaned = _ROOT_SIZE_CLASS_RE.sub(" ", className or "")
     return " ".join(cleaned.split())
@@ -111,7 +112,10 @@ def normalize_root(tree: TreeNode) -> None:
         tree.style.pop(key, None)
     className = tree.props.get("className")
     if isinstance(className, str):
-        tree.props["className"] = (_strip_fixed_size_classes(className) + " w-full").strip()
+        tokens = _strip_fixed_size_classes(className).split()
+        if "w-full" not in tokens:
+            tokens.append("w-full")
+        tree.props["className"] = " ".join(tokens)
     elif not className:
         tree.props["className"] = "w-full"
 
@@ -209,7 +213,9 @@ def _replace_with_component(tree: TreeNode, path: tuple[int, ...], name: str) ->
 # ── rendering ──
 
 
-def _render_named(tree: TreeNode, name: str, *, indent: int = 2) -> tuple[list[str], str]:
+def _render_named(
+    tree: TreeNode, name: str, *, indent: int = 2, emit_figma_id: bool = False
+) -> tuple[list[str], str]:
     """Render a subtree as a named function; returns (imports, function_body)."""
     code = render_jsx(
         tree,
@@ -217,7 +223,7 @@ def _render_named(tree: TreeNode, name: str, *, indent: int = 2) -> tuple[list[s
         format="react",
         css="tailwind",
         component_name=name,
-        emit_figma_id=False,
+        emit_figma_id=emit_figma_id,
     )
     marker = "export default function"
     idx = code.index(marker)
@@ -240,7 +246,10 @@ def _breakpoints(frames: list[Frame]) -> list[dict]:
     ordered = sorted(frames, key=lambda f: f.width)
     out = [{"name": ordered[0].name, "minWidth": 0}]
     for prev, cur in zip(ordered, ordered[1:], strict=False):
-        out.append({"name": cur.name, "minWidth": int((prev.width + cur.width) / 2)})
+        # Keep the boundary strictly above the previous one: frames closer
+        # than 2px apart would otherwise collapse onto the same min-width and
+        # make one breakpoint unreachable.
+        out.append({"name": cur.name, "minWidth": max(out[-1]["minWidth"] + 1, int((prev.width + cur.width) / 2))})
     return out
 
 
@@ -292,6 +301,7 @@ def merge_frames(
     min_shared_nodes: int = 8,
     max_shared_components: int = 12,
     indent: int = 2,
+    emit_figma_id: bool = False,
 ) -> MergeResult:
     """Fold N frame trees into one responsive module."""
     if len(frames) < 2:
@@ -318,18 +328,32 @@ def merge_frames(
     imports: list[str] = []
     shared_bodies: list[str] = []
     for name, rep, _occ in shared:
-        sub_imports, body = _render_named(rep, name, indent=indent)
+        sub_imports, body = _render_named(rep, name, indent=indent, emit_figma_id=emit_figma_id)
         imports.extend(sub_imports)
         shared_bodies.append(body)
 
     derived_page = _to_component_name(ordered[0].tree.name or "ResponsivePage")
-    page = page_name or derived_page
+    # Sanitize the user-supplied name too: `--component-name "My Page"` would
+    # otherwise emit `function My Page()` and write invalid JSX with ok:true.
+    page = _to_component_name(page_name) if page_name else derived_page
     layout_names: dict[str, str] = {}
     layout_bodies: list[str] = []
+    used_layouts: set[str] = set()
     for frame in work:
-        layout = f"{page}{_to_component_name(frame.name)}Layout"
+        base = f"{page}{_to_component_name(frame.name)}"
+        layout = f"{base}Layout"
+        suffix = 2
+        while layout in used_layouts:
+            # Two labels can normalize to the same identifier ("mobile" /
+            # "Mobile", "tablet-v2" / "tablet_v2"); duplicate declarations
+            # would make the last one win for every breakpoint.
+            layout = f"{base}{suffix}Layout"
+            suffix += 1
+        used_layouts.add(layout)
         layout_names[frame.name] = layout
-        frame_imports, body = _render_named(frame.tree, layout, indent=indent)
+        frame_imports, body = _render_named(
+            frame.tree, layout, indent=indent, emit_figma_id=emit_figma_id
+        )
         imports.extend(frame_imports)
         layout_bodies.append(body)
 

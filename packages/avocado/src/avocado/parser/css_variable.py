@@ -153,23 +153,31 @@ def _var_ref(
     if matched:
         collection.var_map_matched += 1
         name = var_map[full_id]
+        # Register under the name that actually appears in the output, so the
+        # collection (and modify_css_var) describes the emitted CSS.
+        collection.full_ids[name] = full_id
+        if fallback is not None and name not in collection.variables:
+            collection.variables[name] = _format_value(fallback)
         if with_fallback and fallback is not None:
             return f"var(--{name}, {_format_value(fallback)})"
         return f"var(--{name})"
 
-    # Unmapped binding: register it for diagnostics, then decide what the
-    # output should carry.
+    # Unmapped binding. `fig-var` mode emits a readable-for-debugging
+    # reference, so the short name is part of the output; `literal` mode keeps
+    # the concrete value and the short name is diagnostic only.
     short = _short_id(full_id)
-    collection.full_ids[short] = full_id
-    if fallback is not None:
-        if short not in collection.variables:
+    if fallback_mode == "fig-var":
+        collection.full_ids[short] = full_id
+        if fallback is not None and short not in collection.variables:
             collection.variables[short] = _format_value(fallback)
-        if fallback_mode == "literal":
-            # Keep the concrete value — `fig-var-<short>` is unreadable and
-            # meaningless to the consumer.
-            return _format_value(fallback)
-    if with_fallback and fallback is not None:
-        return f"var(--{short}, {_format_value(fallback)})"
+        if with_fallback and fallback is not None:
+            return f"var(--{short}, {_format_value(fallback)})"
+        return f"var(--{short})"
+
+    if fallback is not None:
+        return _format_value(fallback)
+    # No concrete value available — fall back to the reference form.
+    collection.full_ids[short] = full_id
     return f"var(--{short})"
 
 

@@ -91,6 +91,12 @@ class ComponentMapping:
 
 STYLE_MODES = ("inline", "className", "props")
 
+# Props that must never be produced by styleProps: they either conflict with
+# the generator's own output (className/style) or are React internals.
+RESERVED_STYLE_PROPS = frozenset(
+    {"className", "class", "style", "key", "ref", "children", "dangerouslySetInnerHTML"}
+)
+
 
 def load_mapping(path: Path | str | None) -> list[ComponentMapping]:
     """Load YAML mapping file. Returns empty list if path is None/missing.
@@ -145,7 +151,7 @@ def load_mapping(path: Path | str | None) -> list[ComponentMapping]:
                 leaf_extras=tuple(str(x) for x in (e.get("leafExtras") or [])),
                 style_mode=style_mode,
                 style_props=_normalize_style_props(e.get("styleProps")),
-                style_drop=tuple(str(x) for x in (e.get("dropStyle") or [])),
+                style_drop=_normalize_drop_style(e.get("dropStyle"), e),
             )
         )
     return out
@@ -167,18 +173,40 @@ def _normalize_style_props(raw) -> dict:
     for css_prop, spec in raw.items():
         key = str(css_prop)
         if isinstance(spec, str):
+            if spec in RESERVED_STYLE_PROPS:
+                raise ValueError(f"styleProps[{key!r}] maps to reserved prop {spec!r}")
             out[key] = {"prop": spec, "values": {}}
         elif isinstance(spec, dict):
             values = spec.get("values") or {}
             if not isinstance(values, dict):
                 raise ValueError(f"styleProps[{key!r}].values must be a mapping")
-            prop_name = spec.get("prop") or _camel_case(key)
-            out[key] = {"prop": str(prop_name), "values": dict(values)}
+            unknown = set(spec) - {"prop", "values"}
+            if unknown:
+                raise ValueError(
+                    f"styleProps[{key!r}] has unknown key(s) {sorted(unknown)}; "
+                    "expected 'prop' and/or 'values'"
+                )
+            prop_name = str(spec.get("prop") or _camel_case(key))
+            if prop_name in RESERVED_STYLE_PROPS:
+                raise ValueError(f"styleProps[{key!r}] maps to reserved prop {prop_name!r}")
+            out[key] = {"prop": prop_name, "values": dict(values)}
         else:
             raise ValueError(
                 f"styleProps[{key!r}] must be a prop name or a mapping, got {type(spec).__name__}"
             )
     return out
+
+
+def _normalize_drop_style(raw, entry: dict) -> tuple[str, ...]:
+    """``dropStyle`` must be a list — a scalar silently became one char per item."""
+    if raw is None:
+        return ()
+    if isinstance(raw, str) or not isinstance(raw, (list, tuple)):
+        raise ValueError(
+            f"dropStyle for component {entry.get('name', entry.get('componentId'))!r} "
+            f"must be a list of CSS properties, got {type(raw).__name__}"
+        )
+    return tuple(str(x) for x in raw)
 
 
 def _camel_case(css_prop: str) -> str:

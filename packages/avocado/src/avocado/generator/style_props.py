@@ -40,6 +40,21 @@ _PX_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)px\s*$")
 _NUM_RE = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*$")
 
 
+def _var_fallback(value: str) -> str | None:
+    """Extract the fallback from ``var(--x, <fallback>)`` (None if absent).
+
+    With ``--css-vars`` a style value can arrive as a var reference; the
+    concrete value lives in the fallback and is what the prop mapping needs.
+    """
+    text = value.strip()
+    if not text.startswith("var(") or not text.endswith(")"):
+        return None
+    inner = text[4:-1]
+    if "," not in inner:
+        return None
+    return inner.rsplit(",", 1)[1].strip()
+
+
 def _numeric(value) -> float | None:
     """Parse a numeric style value (``14``, ``"14"``, ``"14px"``) → float."""
     if isinstance(value, bool):
@@ -47,6 +62,9 @@ def _numeric(value) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        fallback = _var_fallback(value)
+        if fallback is not None:
+            return _numeric(fallback)
         m = _PX_RE.match(value) or _NUM_RE.match(value)
         if m:
             return float(m.group(1))
@@ -55,7 +73,8 @@ def _numeric(value) -> float | None:
 
 def _compact_number(value: float):
     """14.0 → 14 (so JSX emits ``height={128}``, not ``height={128.0}``)."""
-    return int(value) if float(value).is_integer() else round(value, 4)
+    rounded = round(value, 4)
+    return int(rounded) if float(rounded).is_integer() else rounded
 
 
 def _lookup(values: dict, raw) -> tuple[bool, object]:

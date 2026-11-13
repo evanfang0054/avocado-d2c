@@ -477,7 +477,8 @@ def _augment_plugin_matches(tree: TreeNode) -> None:
     metavar="NAME=NODE_ID",
     help="Merge several design frames (one per breakpoint) into a single React module. "
     "Repeat once per frame, e.g. --responsive mobile=1:2 --responsive desktop=1:3. "
-    "Requires --format react --css tailwind and -o. Breakpoints are derived from frame widths.",
+    "Requires --format react --css tailwind; -o writes the module (omit it with --human to print to stdout). "
+    "Breakpoints are derived from frame widths.",
 )
 @click.option(
     "--strip-nodes",
@@ -921,6 +922,36 @@ def main(
     if dry_run:
         from avocado.paths import resolve_token
 
+        # --responsive is validated here too: this block short-circuits before
+        # the responsive branch, and a "validated" ok for malformed specs
+        # would mislead the agent pre-flight gate.
+        _validated_frames: list[dict] | None = None
+        if responsive_frames:
+            from avocado.commands.responsive import parse_frame_specs
+
+            try:
+                _frame_pairs = parse_frame_specs(responsive_frames)
+            except ValueError as e:
+                if human:
+                    click.echo(f"error: {e}", err=True)
+                    sys.exit(2)
+                emit_error("invalid_argument", str(e), exit_code=2)
+                return
+            if output_format.lower() != "react" or css_form.lower() != "tailwind":
+                _msg = "--responsive requires --format react --css tailwind"
+                if human:
+                    click.echo(f"error: {_msg}", err=True)
+                    sys.exit(2)
+                emit_error("invalid_argument", _msg, exit_code=2)
+                return
+            if output is None and not human:
+                _msg = "--responsive requires -o <file> in envelope mode (pass --human to print to stdout)"
+                emit_error("invalid_argument", _msg, exit_code=2)
+                return
+            _validated_frames = [
+                {"name": name, "node_id": node_id} for name, node_id in _frame_pairs
+            ]
+
         _ts = resolve_token(
             token
         )  # probe the token source again (so dry-run reports a missing token)
@@ -945,6 +976,7 @@ def main(
                     "component_lib": component_lib,
                     "offline": offline,
                     "summary": summary,
+                    **({"responsive_frames": _validated_frames} if _validated_frames else {}),
                 },
                 "token_source": _token_source,
                 "would_write": [str(output)] if output else [],
@@ -993,6 +1025,15 @@ def main(
             var_map_path=var_map_path,
             var_fallback=var_fallback,
             component_lib=component_lib,
+            precision=precision,
+            beautify_flag=beautify_flag,
+            figma_id=figma_id,
+            auto_group_variance=auto_group_variance_flag,
+            gap_to_margin=gap_to_margin_flag,
+            box_sizing=box_sizing,
+            inspect=inspect,
+            summary=summary,
+            trace_adapter=trace_adapter,
             token_source=(
                 "cli_flag"
                 if token
