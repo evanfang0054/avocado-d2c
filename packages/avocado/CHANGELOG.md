@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-11-13)
+
+### Bug Fixes
+
+- Address review findings across responsive / var-map paths
+  ([`75786c5`](https://github.com/evanfang0054/avocado-d2c/commit/75786c5e9969ab0e2917cf96cffcfe738d71532e))
+
+- **responsive**: Honour --css-vars / --var-map in merge mode
+  ([`3f1e0a6`](https://github.com/evanfang0054/avocado-d2c/commit/3f1e0a6500be1a95bb469e90435b31f97acec5fa))
+
+### Features
+
+- **preset**: Emit component style as props via styleMode
+  ([`ec0b908`](https://github.com/evanfang0054/avocado-d2c/commit/ec0b908ba26bd6d3cf21532b9fc39e67a00086c9))
+
+- **responsive**: Merge multi-breakpoint frames into one module
+  ([`654a5e3`](https://github.com/evanfang0054/avocado-d2c/commit/654a5e3e6492d789e2d1e091db75a9f4c52565a0))
+
+- **vars**: Keep literal values for unmapped bindings by default
+  ([`dab8a48`](https://github.com/evanfang0054/avocado-d2c/commit/dab8a484bae0f7bf63c1530f80d1e6e071ddd3ce))
+
+
 ## v1.5.0 (2026-08-17)
 
 ### Features
