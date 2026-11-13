@@ -66,6 +66,23 @@ avocado "<figma-url>" --component-lib antd -o Card.jsx
 
 自建组件库：首次运行 `avocado init` 会在 `~/.avocado/presets/` 生成带教学注释的 `antd.yaml.example` 模板，编辑一份 YAML 映射即可接入自家组件。
 
+### 多断点合并成一个组件
+
+设计稿通常把同一页面画成 mobile / tablet / desktop 三个画板，逐个转换会得到三份互相漂移的代码。`--responsive` 把它们合并成一个 React 模块：每档一个布局函数、一个 `useResponsiveBreakpoint()`（纯 `matchMedia`，无依赖）、跨画板内容完全相同的子树抽成 `Shared*` 组件。
+
+```bash
+avocado "<任意画板链接>" \
+  --responsive mobile=10:20 --responsive tablet=10:30 --responsive desktop=10:40 \
+  --format react --component-name AccessPage -o AccessPage.tsx
+```
+
+- 断点名由命令行提供，阈值取相邻画板宽度的中点，结果写进 envelope 的 `data.responsive.breakpoints`
+- 根节点的固定宽高会被去掉并补 `w-full`，否则移动端布局在宽视口里仍然是 390px
+- `--strip-nodes "Status Bar"` 按图层名删掉画布装饰（状态栏、选中框），可重复
+- `--shared-min-nodes 8` 控制共享组件的最小节点数；`data.responsive.shared_components` 列出抽出来的组件
+- `--css-vars` 开启变量替换；var-map 里没有的变量默认**保留字面值**（不再输出 `var(--fig-var-xxx)`），需要排查未映射绑定时加 `--var-fallback fig-var`
+- 只支持 `--format react --css tailwind`；合并结果会先过 tree-sitter 校验
+
 ### 离线加速
 
 ```bash

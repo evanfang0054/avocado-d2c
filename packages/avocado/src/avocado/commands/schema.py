@@ -131,6 +131,15 @@ _SPEC: dict = {
                     "help": "YAML file mapping VariableID → semantic CSS variable name",
                 },
                 {
+                    "name": ["--var-fallback"],
+                    "type": "choice",
+                    "choices": ["literal", "fig-var"],
+                    "default": "literal",
+                    "help": "What to emit for a bound variable missing from the var-map: "
+                    "'literal' keeps the concrete value (readable output), "
+                    "'fig-var' emits var(--fig-var-<short>, value) for adapter debugging",
+                },
+                {
                     "name": ["--precision"],
                     "type": "choice",
                     "choices": ["0", "1", "2", "unset"],
@@ -235,6 +244,35 @@ _SPEC: dict = {
                     "extractor outputs (success + error enum) and plugin hook stats, plus a derived issues top-10. "
                     "Deterministic; default off (zero envelope impact)",
                 },
+                {
+                    "name": ["--responsive"],
+                    "type": "str (repeatable, NAME=NODE_ID)",
+                    "default": [],
+                    "help": "Merge several design frames into one React module (one layout per breakpoint + "
+                    "useResponsiveBreakpoint() + Shared* components for identical subtrees). "
+                    "Requires --format react, --css tailwind and -o. Breakpoint thresholds derive from frame widths. "
+                    "Adds data.responsive{frames,breakpoints,shared_components,stats} to the envelope",
+                },
+                {
+                    "name": ["--strip-nodes"],
+                    "type": "str (repeatable)",
+                    "default": [],
+                    "help": "With --responsive: drop nodes whose layer name contains TEXT (case-insensitive), "
+                    "e.g. design-canvas chrome such as status bars",
+                },
+                {
+                    "name": ["--shared-min-nodes"],
+                    "type": "int",
+                    "default": 8,
+                    "help": "With --responsive: minimum subtree size to extract as a shared component",
+                },
+                {
+                    "name": ["--component-name"],
+                    "type": "str",
+                    "default": None,
+                    "help": "With --responsive: name of the generated page component "
+                    "(default: derived from the first frame's layer name)",
+                },
             ],
             "examples": [
                 'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" -o out.jsx',
@@ -243,6 +281,7 @@ _SPEC: dict = {
                 'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" --figma-id --format html -o out.html',
                 'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" --preset designer -o out.html',
                 'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" --preset dev -o out.jsx',
+                'avocado "https://www.figma.com/design/XXXX/Title?node-id=10:20" --responsive mobile=10:20 --responsive desktop=10:30 --format react -o Page.jsx',
             ],
             "data_artifacts": {  # d2c envelope.data structure description (for agent introspection)
                 "jsx": "Generated JSX text (echoed back to the envelope even when -o writes a file)",
@@ -263,6 +302,7 @@ _SPEC: dict = {
                 "warnings": "list[str]; non-fatal warnings (beautify failure/deprecation)",
                 "timing": "dict; includes duration_seconds (non-deterministic field)",
                 "trace": "Optional; present only with --trace-adapter. preset_matches{total,matched,unmatched,unmatched_details(node_id,node_name,layer_type,skipped_by,reason,path,suggestion),matched_samples(node_id,node_name,layer_type,matched_by,entry_short,variant_hits,path),applied_details(node_id,node_name,component?,path,variant_prop_hits,variant_prop_misses,leaf_dropped)} / extractor_outputs[{component,extractor,path,success,keys,sample,error?(not_registered/exception/empty_result),error_detail?}] / plugin_hooks[{plugin,hook,nodes_affected,sample_names}] / issues{unmatched_by_name,extractor_failures,leaf_drops,variant_prop_misses}. Deterministic; for adapter authoring debug",
+                "responsive": "Optional; present only with --responsive. frames[{name,node_id,width}] / breakpoints[{name,minWidth}] / shared_components[str] / stats{frames,nodes_before_merge,nodes_replaced_by_shared,generated_lines}",
             },
         },
         {

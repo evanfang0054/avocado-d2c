@@ -594,26 +594,39 @@ def apply_tailwind(tree: TreeNode) -> None:
 
     Mutates tree in-place: sets tree.props['className'] and trims tree.style.
 
-    Recognized component nodes (``is_component`` with a component tag) are
-    skipped: their style stays as an inline ``style={{...}}`` prop. React
-    merges a ``style`` prop onto the component's root element, reliably
-    overriding the library's own defaults, whereas a tailwind ``className``
-    is *appended* and stacks with the component's internal token-driven
-    padding/sizing — double padding, off-size buttons, misaligned regions
-    below (issue #35). Children of a component are still converted (they are
-    plain nodes).
+    Emission depends on the node's ``style_mode`` (set from the preset entry
+    by ``parser/component.py``; plain nodes always use ``"className"``):
+
+    - ``"inline"`` (default for components) — style stays as an inline
+      ``style={{...}}`` prop. React merges a ``style`` prop onto the
+      component's root element, reliably overriding the library's own
+      defaults, whereas a tailwind ``className`` is *appended* and stacks
+      with the component's internal token-driven padding/sizing — double
+      padding, off-size buttons, misaligned regions below (issue #35).
+    - ``"className"`` — convert to tailwind classes. Only use it for
+      components with no internal padding/sizing of their own.
+    - ``"props"`` — move style keys into component props via
+      ``styleProps`` (e.g. fontSize → a typography component's ``size``
+      prop), drop the
+      geometry noise listed in ``dropStyle``, and keep unmapped keys inline
+      (fidelity first). See ``generator/style_props.py``.
+
+    Children of a component are still converted (they are plain nodes).
 
     Pseudo components (``is_component`` but an empty ``tag_name`` — a preset
     with ``component: ''`` that keeps the Figma DOM) render as plain div/img
     with no library default styles, so converting them to className is safe
     and keeps className usage consistent (issue #41).
     """
+    from avocado.generator.style_props import apply_style_props
+
     stack = [tree]
     while stack:
         n = stack.pop()
-        # Skip *real* components (is_component with a tag). Pseudo components
-        # (empty tag_name → plain div/img) convert normally.
-        if not (n.is_component and n.tag_name) and n.style:
+        mode = n.style_mode if (n.is_component and n.tag_name) else "className"
+        if mode == "props" and n.style:
+            apply_style_props(n)
+        elif mode == "className" and n.style:
             classes, leftover = style_to_tailwind(n.style)
             if classes:
                 # If node has existing className (e.g. from earlier passes),

@@ -368,6 +368,11 @@ def _render_node(
         if tag in _VOID_TAGS:
             # img/input/etc — true self-close
             return [f"{open_tag} />"]
+        if react and node.is_component:
+            # Business component with no children: `<Icon />` reads like
+            # hand-written JSX. Only in React mode — HTML preview parsers
+            # treat `<div />` as unclosed, so keep the explicit pair there.
+            return [f"{open_tag} />"]
         # Non-void tag with no content: explicit open+close
         # (HTML5 ignores <div /> as a self-close; JSX would allow it but
         # our output is parsed as HTML by browsers during preview).

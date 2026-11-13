@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from avocado.model.scene_node import SceneNode
 from avocado.parser.css_variable import (
     CssVariableCollection,
@@ -440,3 +442,62 @@ def test_var_map_empty_does_not_count() -> None:
     collection = collect_variables(scene, tree, var_map={}, with_fallback=True)
     assert collection.var_map_matched == 0
     assert collection.var_map_total == 1
+
+
+# ── fallback_mode: unmapped bindings ──
+
+
+def _bound_box(var_id: str):
+    scene = SceneNode.from_dict(
+        {
+            "id": "1:1",
+            "name": "Box",
+            "type": "RECTANGLE",
+            "visible": True,
+            "absoluteBoundingBox": {"x": 0, "y": 0, "width": 100, "height": 50},
+            "cornerRadius": 8,
+            "boundVariables": {
+                "cornerRadius": {"id": var_id, "type": "VARIABLE_ALIAS"},
+            },
+        }
+    )
+    return scene, map_node(scene)
+
+
+def test_unmapped_binding_keeps_literal_value() -> None:
+    """literal mode: an unmapped binding must not leak `fig-var-<short>`."""
+    scene, tree = _bound_box("VariableID:abc/1:2")
+    collection = collect_variables(scene, tree, var_map={}, fallback_mode="literal")
+
+    assert tree.style.get("border-radius") == "8px"
+    assert collection.var_map_total == 1
+    assert collection.var_map_matched == 0
+    # The fig-var name never reaches the output, so the emitted-CSS table
+    # (consumed by modify_css_var) stays empty.
+    assert collection.variables == {}
+
+
+def test_unmapped_binding_keeps_fig_var_when_requested() -> None:
+    scene, tree = _bound_box("VariableID:abc/1:2")
+    collect_variables(scene, tree, var_map={}, fallback_mode="fig-var")
+    assert tree.style.get("border-radius") == "var(--fig-var-1-2, 8px)"
+
+
+def test_mapped_binding_unaffected_by_fallback_mode() -> None:
+    scene, tree = _bound_box("VariableID:abc/1:2")
+    collection = collect_variables(
+        scene,
+        tree,
+        var_map={"VariableID:abc/1:2": "brand-radius"},
+        fallback_mode="literal",
+    )
+    assert tree.style.get("border-radius") == "var(--brand-radius, 8px)"
+    # Registered under the emitted name so plugins see the real CSS.
+    assert collection.variables == {"brand-radius": "8px"}
+    assert collection.full_ids == {"brand-radius": "VariableID:abc/1:2"}
+
+
+def test_unknown_fallback_mode_raises() -> None:
+    scene, tree = _bound_box("VariableID:abc/1:2")
+    with pytest.raises(ValueError, match="fallback_mode"):
+        collect_variables(scene, tree, fallback_mode="nope")

@@ -249,6 +249,73 @@ def test_apply_tailwind_skips_component_nodes() -> None:
     assert node.style == {"display": "flex", "background-color": "#ffffff"}
 
 
+def test_apply_tailwind_props_mode_moves_style_into_props() -> None:
+    """styleMode: props → component props instead of an inline style blob."""
+    node = TreeNode(
+        id="0",
+        name="t",
+        source_type="INSTANCE",
+        tag_name="Text",
+        is_component=True,
+        style={"font-size": "14px", "width": "70px", "height": "22px"},
+        style_mode="props",
+        style_props={"font-size": {"prop": "size", "values": {"14": "sm"}}},
+        style_drop=("width", "height"),
+    )
+    apply_tailwind(node)
+    assert node.props["size"] == "sm"
+    assert node.style == {}
+    assert "className" not in node.props
+
+
+def test_apply_tailwind_props_mode_keeps_unmapped_inline() -> None:
+    node = TreeNode(
+        id="0",
+        name="t",
+        source_type="INSTANCE",
+        tag_name="Text",
+        is_component=True,
+        style={"font-size": "17px", "color": "#333333"},
+        style_mode="props",
+        style_props={"font-size": {"prop": "size", "values": {"14": "sm"}}},
+    )
+    apply_tailwind(node)
+    assert "size" not in node.props
+    assert node.style == {"font-size": "17px", "color": "#333333"}
+
+
+def test_apply_tailwind_className_mode_for_component() -> None:
+    """styleMode: className opts a component into tailwind conversion."""
+    node = TreeNode(
+        id="0",
+        name="wrap",
+        source_type="INSTANCE",
+        tag_name="Card",
+        is_component=True,
+        style={"display": "flex", "background-color": "#ffffff"},
+        style_mode="className",
+    )
+    apply_tailwind(node)
+    assert "flex" in node.props["className"]
+    assert "bg-white" in node.props["className"]
+    assert node.style == {}
+
+
+def test_style_mode_ignored_for_plain_nodes() -> None:
+    """Only recognized components honour style_mode."""
+    node = TreeNode(
+        id="0",
+        name="d",
+        source_type="FRAME",
+        style={"display": "flex"},
+        style_mode="props",
+        style_props={"display": {"prop": "display", "values": {}}},
+    )
+    apply_tailwind(node)
+    assert node.props == {"className": "flex"}
+    assert node.style == {}
+
+
 def test_apply_tailwind_still_converts_component_children() -> None:
     """Plain child nodes of a component are still converted to className."""
     child = TreeNode(id="1", name="text", source_type="TEXT", tag_name="span",

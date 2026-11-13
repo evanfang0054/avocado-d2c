@@ -27,24 +27,22 @@ from avocado.api.figma import (
 from avocado.envelope import emit_error, emit_ok
 from avocado.generator.codegen import render_jsx
 from avocado.generator.css_class import apply_css_class, render_css_block
+from avocado.generator.style_props import apply_style_prop_modes
 from avocado.model.scene_node import SceneNode
 from avocado.model.tree_node import TreeNode
 from avocado.parser.component import load_mapping, load_preset
 from avocado.parser.css_variable import collect_variables
 from avocado.parser.inspect import collect_all_warnings, run_all_inspect_rules
 from avocado.parser.node_mapper import map_node
-from avocado.parser.optimize import (
-    apply_auto_group_variance,
-    apply_semantic_tags,
-    gap_to_margin,
-    promote_inherited_styles,
-    reround_class_map,
-    reround_styles,
-    strip_default_styles,
-    unwrap_single_child,
-)
+from avocado.parser.optimize import reround_class_map, reround_styles
+from avocado.parser.passes import apply_parse_passes
 from avocado.parser.var_map import load_var_map
 from avocado.plugins.base import build_registry, default_plugin_dirs
+from avocado.plugins.stages import (
+    apply_css_var_hook,
+    apply_template_hook,
+    collect_draft_warnings,
+)
 
 
 def _sanitize_ansi(text: str) -> str:
@@ -347,6 +345,15 @@ def _augment_plugin_matches(tree: TreeNode) -> None:
     help="YAML file mapping VariableID → semantic CSS variable name. "
     "If omitted with --component-lib, auto-loads var-maps/<lib>.yaml.",
 )
+@click.option(
+    "--var-fallback",
+    type=click.Choice(["literal", "fig-var"], case_sensitive=False),
+    default="literal",
+    show_default=True,
+    help="What to emit for a bound variable that is missing from the var-map: "
+    "'literal' keeps the concrete value (readable output), "
+    "'fig-var' emits var(--fig-var-<short>, value) for adapter debugging.",
+)
 # ── optimization passes ──
 @click.option(
     "--precision",
@@ -463,6 +470,39 @@ def _augment_plugin_matches(tree: TreeNode) -> None:
     "comma-separated subset filters (preset/extractor/hook). "
     "Adds data.trace to the envelope: preset match details, extractor outputs, plugin hook stats.",
 )
+@click.option(
+    "--responsive",
+    "responsive_frames",
+    multiple=True,
+    metavar="NAME=NODE_ID",
+    help="Merge several design frames (one per breakpoint) into a single React module. "
+    "Repeat once per frame, e.g. --responsive mobile=1:2 --responsive desktop=1:3. "
+    "Requires --format react --css tailwind; -o writes the module (omit it with --human to print to stdout). "
+    "Breakpoints are derived from frame widths.",
+)
+@click.option(
+    "--strip-nodes",
+    "strip_nodes",
+    multiple=True,
+    metavar="TEXT",
+    help="With --responsive: drop nodes whose layer name contains TEXT (case-insensitive). "
+    "Handy for design-canvas chrome (status bars, selection frames). Repeatable.",
+)
+@click.option(
+    "--shared-min-nodes",
+    "shared_min_nodes",
+    type=int,
+    default=8,
+    show_default=True,
+    help="With --responsive: minimum subtree size to extract as a shared component.",
+)
+@click.option(
+    "--component-name",
+    "component_name",
+    default=None,
+    help="With --responsive: name of the generated page component "
+    "(default: derived from the first frame's layer name).",
+)
 def main(
     url: str,
     output: Path | None,
@@ -479,6 +519,7 @@ def main(
     layout: str,
     css_vars: bool,
     var_map_path: Path | None,
+    var_fallback: str,
     precision: str,
     box_sizing: str,
     gap_to_margin_flag: bool,
@@ -494,6 +535,10 @@ def main(
     html_fragment: bool = False,
     preview_centered: bool = False,
     trace_adapter: str | None = None,
+    responsive_frames: tuple[str, ...] = (),
+    strip_nodes: tuple[str, ...] = (),
+    shared_min_nodes: int = 8,
+    component_name: str | None = None,
 ) -> None:
     """Convert a Figma node URL to JSX code.
 
@@ -877,6 +922,36 @@ def main(
     if dry_run:
         from avocado.paths import resolve_token
 
+        # --responsive is validated here too: this block short-circuits before
+        # the responsive branch, and a "validated" ok for malformed specs
+        # would mislead the agent pre-flight gate.
+        _validated_frames: list[dict] | None = None
+        if responsive_frames:
+            from avocado.commands.responsive import parse_frame_specs
+
+            try:
+                _frame_pairs = parse_frame_specs(responsive_frames)
+            except ValueError as e:
+                if human:
+                    click.echo(f"error: {e}", err=True)
+                    sys.exit(2)
+                emit_error("invalid_argument", str(e), exit_code=2)
+                return
+            if output_format.lower() != "react" or css_form.lower() != "tailwind":
+                _msg = "--responsive requires --format react --css tailwind"
+                if human:
+                    click.echo(f"error: {_msg}", err=True)
+                    sys.exit(2)
+                emit_error("invalid_argument", _msg, exit_code=2)
+                return
+            if output is None and not human:
+                _msg = "--responsive requires -o <file> in envelope mode (pass --human to print to stdout)"
+                emit_error("invalid_argument", _msg, exit_code=2)
+                return
+            _validated_frames = [
+                {"name": name, "node_id": node_id} for name, node_id in _frame_pairs
+            ]
+
         _ts = resolve_token(
             token
         )  # probe the token source again (so dry-run reports a missing token)
@@ -901,11 +976,73 @@ def main(
                     "component_lib": component_lib,
                     "offline": offline,
                     "summary": summary,
+                    **({"responsive_frames": _validated_frames} if _validated_frames else {}),
                 },
                 "token_source": _token_source,
                 "would_write": [str(output)] if output else [],
                 "hint": "dry-run only validates params; it does not call the Figma API or write files. Remove --dry-run to run the real generation.",
             }
+        )
+        return
+
+    # ── multi-frame responsive merge (--responsive) ──
+    # Isolated branch: each frame is built with the same pass helpers as the
+    # single-frame path, then folded into one React module. The positional URL
+    # only supplies the file key; frames come from --responsive NAME=NODE_ID.
+    if responsive_frames:
+        if output is None and not human:
+            emit_error(
+                "invalid_argument",
+                "--responsive requires -o <file> in envelope mode "
+                "(pass --human to print the merged module to stdout)",
+                exit_code=2,
+            )
+            return
+        os.environ["AVOCADO_COMPONENT_MODE"] = (
+            "1" if (components is not None or component_lib is not None) else "0"
+        )
+        from avocado.commands.responsive import run_responsive
+        from avocado.paths import resolve_token
+
+        run_responsive(
+            url=url,
+            file_key=ref.file_key,
+            specs=responsive_frames,
+            client=client,
+            mapping=component_mapping,
+            registry=build_registry(*default_plugin_dirs()),
+            output=output,
+            output_format=output_format,
+            css_form=css_form,
+            layout=layout,
+            strip_nodes=strip_nodes,
+            shared_min_nodes=shared_min_nodes,
+            component_name=component_name,
+            depth=depth,
+            offline=offline,
+            human=human,
+            css_vars=css_vars,
+            var_map_path=var_map_path,
+            var_fallback=var_fallback,
+            component_lib=component_lib,
+            precision=precision,
+            beautify_flag=beautify_flag,
+            figma_id=figma_id,
+            auto_group_variance=auto_group_variance_flag,
+            gap_to_margin=gap_to_margin_flag,
+            box_sizing=box_sizing,
+            inspect=inspect,
+            summary=summary,
+            trace_adapter=trace_adapter,
+            token_source=(
+                "cli_flag"
+                if token
+                else (
+                    "env_var"
+                    if os.environ.get("FIGMA_TOKEN")
+                    else ("config_file" if resolve_token(token) else "none")
+                )
+            ),
         )
         return
 
@@ -1006,56 +1143,17 @@ def main(
     )
 
     # ── post-parse optimization passes (pre-plugin) ──
-    # Order matters:
-    # 1. auto_group_variance — orient ambiguous containers first so
-    # subsequent structural passes see a stable flex direction.
-    # 2. inherit_promote — lift common inherited props before
-    # strip_defaults touches them.
-    # 3. strip_defaults — drop defaults now that inherit-promote
-    # has consolidated values.
-    # 4. unwrap_single_child — collapse wrappers after style is settled.
-    # 5. gap_to_margin — last; depends on final flex-direction.
-    if auto_group_variance_flag:
-        apply_auto_group_variance(tree)
-    if inherit_promote_flag:
-        promote_inherited_styles(tree)
-    if strip_defaults_flag:
-        strip_default_styles(tree)
-    # FIX: run name-based component recognition (modify_json_schema) BEFORE
-    # unwrap_single_child. unwrap merges single-child wrappers into their
-    # child; if the wrapper's Figma layer name matches a preset component
-    # (e.g. "Body" → <Text>), unwrapping it would delete a component the
-    # plugin would have recognized. Marking components first lets unwrap's
-    # is_component guard keep them.
-    if registry.has("modify_json_schema"):
-        tree = registry.call("modify_json_schema", None, tree)
-    if unwrap_single_flag:
-        tree = unwrap_single_child(tree)
-    if gap_to_margin_flag:
-        gap_to_margin(tree)
-
-    # 6. semantic_tags — rewrite tag_name for landmark nodes
-    # (header/nav/main/footer/aside/article/section). Runs LAST
-    # because it only touches tag_name, never style/layout — no
-    # risk of breaking earlier passes. Zero visual impact (CSS
-    # treats <header> same as <div>), but improves SEO/a11y/JDX
-    # readability. Conservative: skips component/img/text nodes.
-    # UA-styled content tags (h1-h6/p/ul/li/button) are only emitted for
-    # tailwind (preflight resets them); inline/class keep them as div since
-    # no reset would be injected (zero-visual guarantee, #28/#30).
-    apply_semantic_tags(tree, css_form=css_form)
-
-    # Plugin loading moved BEFORE map_node (see above). modify_json_schema
-    # already ran before unwrap (component nodes are then protected from
-    # merging); modify_style runs here on the fully-built tree.
-    if registry.has("modify_style"):
-        # Walk tree, apply modify_style per node
-        stack = [tree]
-        while stack:
-            n = stack.pop()
-            new_style = registry.call("modify_style", n, dict(n.style))
-            n.style = new_style
-            stack.extend(n.children)
+    # Order is defined once in parser/passes.py (shared with --responsive).
+    tree = apply_parse_passes(
+        tree,
+        registry=registry,
+        css_form=css_form,
+        auto_group_variance=auto_group_variance_flag,
+        inherit_promote=inherit_promote_flag,
+        strip_defaults=strip_defaults_flag,
+        unwrap_single=unwrap_single_flag,
+        gap_to_margin_enabled=gap_to_margin_flag,
+    )
 
     # ── CSS variable replacement ──
     css_collection = None  # set when css_vars=True; surfaced in envelope
@@ -1104,12 +1202,18 @@ def main(
                 "--css-vars enabled but no --var-map given (and no --component-lib auto-load), "
                 "all CSS variable references will use fallback values"
             )
-        css_collection = collect_variables(scene, tree, var_map=var_map, with_fallback=True)
+        css_collection = collect_variables(
+            scene,
+            tree,
+            var_map=var_map,
+            with_fallback=True,
+            fallback_mode=var_fallback,
+        )
         # Warn when --var-map was provided but matched zero bindings — the user
         # explicitly opted in but the Figma file has no usable boundVariables
         # (or the VariableIDs don't match the var-map keys). Without this
-        # warning the output silently uses fig-var-<short> names instead of
-        # the semantic names the user expected.
+        # warning the output silently degrades instead of using the semantic
+        # names the user expected.
         if css_collection.var_map_total > 0 and css_collection.var_map_matched == 0:
             _vm_src = (
                 str(var_map_path)
@@ -1118,18 +1222,34 @@ def main(
                     f"--component-lib {component_lib} auto-load" if component_lib else "(unknown)"
                 )
             )
+            _unmapped = (
+                "Unmatched variables keep their literal values."
+                if var_fallback == "literal"
+                else "Unmatched variables use fig-var-<short> fallback names."
+            )
             warnings.append(
                 f"--var-map loaded from {_vm_src} but matched 0 / "
                 f"{css_collection.var_map_total} bindings — possible causes: "
                 "(1) the Figma file uses Styles not Variables; "
                 "(2) var-map keys don't match this file's VariableIDs; "
-                "(3) --depth too low returned shallow boundVariables. "
-                "All CSS variable references will use fig-var-<short> fallback names."
+                f"(3) --depth too low returned shallow boundVariables. {_unmapped}"
             )
+
+    # User plugins may rewrite the collected variable table (e.g. rename
+    # fig-var-<short> to a semantic convention before output).
+    if css_collection is not None:
+        css_collection.variables = apply_css_var_hook(registry, css_collection.variables)
 
     # Run all inspectDraft rules. Warnings attach to tree nodes in-place;
     # the return value is intentionally discarded (call sites use tree.inspect).
     run_all_inspect_rules(tree)
+    # User plugins can contribute their own inspect warnings (same entry shape).
+    collect_draft_warnings(registry, tree)
+
+    # Component style → props (preset styleMode: props). Runs before the --css
+    # branch: moving style into props is orthogonal to how leftover CSS is
+    # emitted, so inline/class/tailwind all get the same component props.
+    apply_style_prop_modes(tree)
 
     # Convert to Tailwind className form if requested.
     # css_form reflects the user's --css choice (defaults to tailwind).
@@ -1249,6 +1369,11 @@ def main(
 
         jsx = wrap_html_document(jsx, root=tree, preview_centered=preview_centered)
         html_wrapped = True
+
+    # Last chance for plugins to rewrite the delivered artifact (strip debug
+    # attributes, collapse boilerplate, inject imports, ...). Runs after
+    # beautify/HTML wrapping so the plugin sees exactly what is written out.
+    jsx = apply_template_hook(registry, tree, jsx)
 
     # Write artifacts to disk if -o was given. This happens in BOTH human and
     # envelope modes — the file is the source of truth for downstream tools
@@ -1711,6 +1836,7 @@ def main(
             "component_lib": component_lib,
             # FIX: complete the key flags (mode fully reproduces the output conditions)
             "css_vars": css_vars,
+            "var_fallback": var_fallback,
             "precision": precision,
             "box_sizing": box_sizing,
             "figma_id": figma_id,

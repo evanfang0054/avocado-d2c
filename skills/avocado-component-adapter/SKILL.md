@@ -1,6 +1,6 @@
 ---
 name: avocado-component-adapter
-description: "Use when an agent needs to adapt a component library to avocado — editing/extending preset YAML (antd.yaml etc.) AND writing the companion plugins (~/.avocado/plugins/*.py) that make presets work, OR debugging why a component is not recognized (--trace-adapter). Covers the ComponentMapping schema (9 fields: name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Also covers the Plugin base class contract (name/presets_used), the 6 hooks (modify_json_schema/modify_props/modify_style/modify_css_var/generate_template/inspect_draft) with signatures and return conventions, the name-recognizer template for recognizing non-INSTANCE layers by Figma name, and why modify_json_schema runs before unwrap (component protection). Also covers the --trace-adapter debug flag (preset match details + path/suggestion, applied_details, extractor error classification, plugin hook stats, issues aggregation) for the adapter authoring loop. Triggers on \"加组件\", \"antd.yaml\", \"preset 改\", \"组件识别\", \"INSTANCE 识别不到\", \"leaf 字段\", \"variant\", \"dynamicProps\", \"extractor\", \"componentId\", \"Figma 组件映射\", \"写插件\", \"plugin\", \"hook\", \"name-recognizer\", \"调试\", \"为什么没识别\", \"trace\". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff."
+description: "Use when an agent needs to adapt a component library to avocado — editing/extending preset YAML (antd.yaml etc.) AND writing the companion plugins (~/.avocado/plugins/*.py) that make presets work, OR debugging why a component is not recognized (--trace-adapter). Covers the ComponentMapping schema (name/componentId match criteria, component/package/props/variantProperties/variants/dynamicProps/leaf/blockNameMatch/leafExtras/styleMode/styleProps/dropStyle), how styleMode chooses between inline style / tailwind className / component props (and why the inline default exists), the blockNameMatch white-screen guard rules, componentId alias for cross-file same-component-different-id (Button has 7 entries covering 6 compId), when to add `leaf: true` (only for self-contained components like LabeledInput) vs not (Button needs children), dynamicProps extractors registered by user plugins via register_extractor, and how variants override propagates the leaf field. Also covers the Plugin base class contract (name/presets_used), the 6 hooks (modify_json_schema/modify_style/modify_props/modify_css_var/generate_template/inspect_draft — all wired through plugins/stages.py) with signatures and run order, the name-recognizer template for recognizing non-INSTANCE layers by Figma name, and why modify_json_schema runs before unwrap (component protection). Also covers the --trace-adapter debug flag (preset match details + path/suggestion, applied_details, extractor error classification, plugin hook stats, issues aggregation) for the adapter authoring loop. Triggers on \"加组件\", \"antd.yaml\", \"preset 改\", \"组件识别\", \"INSTANCE 识别不到\", \"leaf 字段\", \"variant\", \"dynamicProps\", \"extractor\", \"componentId\", \"styleMode\", \"Figma 组件映射\", \"写插件\", \"plugin\", \"hook\", \"name-recognizer\", \"调试\", \"为什么没识别\", \"trace\". Does NOT cover general path lookup (avocado-path-config), running d2c (avocado-d2c), or debugging pixel diff."
 ---
 
 # avocado-component-adapter
@@ -45,6 +45,11 @@ description: "Use when an agent needs to adapt a component library to avocado �
 | `variants` | `variants` | dict |
 | `dynamicProps` | `dynamic_props` | dict |
 | `leaf` | `leaf` | bool（默认 False） |
+| `blockNameMatch` | `block_name_match` | bool（默认 False） |
+| `leafExtras` | `leaf_extras` | tuple[str, ...] |
+| `styleMode` | `style_mode` | `"inline"`（默认）\| `"className"` \| `"props"` |
+| `styleProps` | `style_props` | dict：`{css-prop: prop名}` 或 `{css-prop: {prop, values}}` |
+| `dropStyle` | `style_drop` | tuple[str, ...] |
 
 ### YAML 示例（完整字段）
 
@@ -75,6 +80,42 @@ components:
 | `dynamicProps:` | 0 | bundled 示例不含 extractor（由用户插件注册） |
 
 **注**：这些字段是**少数派用法**——18 个 entry 里多数只用 `name` + `component` + `package` 三字段。
+
+## 样式出口：styleMode / styleProps / dropStyle
+
+识别成组件 ≠ 输出得像人写的代码。默认行为是**整块 style 原样塞进 `style={{...}}`**（不能改成 className：className 会叠加组件内建 padding/sizing，issue #35）。结果是 `<Text style={{width:"70px", height:"22px", fontSize:"14px"}}>` 这种像素钉死的写法。
+
+`styleMode` 让每个组件声明自己的样式载体：
+
+| styleMode | 行为 | 适用 |
+|---|---|---|
+| `inline`（默认） | 保持 `style={{...}}` | 组件自己管 padding/sizing |
+| `className` | 转 Tailwind class | 纯布局 wrapper，无内建样式 |
+| `props` | 按 `styleProps` 把 style 搬进 props，`dropStyle` 删除几何噪声，未命中保留 inline | 文字/图片等 props 驱动的组件 |
+
+```yaml
+- name: "Text"
+  component: "Text"
+  package: "@scope/ui"
+  styleMode: props
+  styleProps:
+    font-size:            # 长格式：值映射（14px → size="sm"）
+      prop: size
+      values: { "12": xs, "14": sm, "16": md }
+    color: color          # 简写：原值 → 同名 prop
+  dropStyle: [width, height, flex-shrink]
+```
+
+保真规则（改这块时不要动）：
+1. **值映射未命中 → 保留 inline**，17px 不会被悄悄改写成 `size="default"`；
+2. **已有 prop 优先**（`props:` / `variantProperties` 设置的），重复的 CSS 键会被删掉，避免 inline 覆盖 prop；
+3. `dropStyle` 无条件删除（组件自己会算尺寸）。
+
+> **name-recognizer 插件必须调用 `apply_style_mode(node, m)`**（`avocado.parser.component`）。主流程的 INSTANCE 识别由 `apply_component` 自动带上这三个字段；插件在 `map_node` 之后才标节点，不调用这个 helper 的话 `styleMode` 对插件识别出的节点不生效。
+>
+> 另外：`font-size` 之类通常挂在组件节点**内部的 span** 上，而不是组件节点自身——`styleProps` 只能映射组件节点自己的 style，内层文本样式需要配合 `dynamicProps` extractor 或后续 `modify_style` 处理。
+
+实现：`packages/avocado/src/avocado/generator/style_props.py`（纯函数，配 `tests/test_style_props.py`）；出口分派在 `generator/tailwind.py::apply_tailwind`。
 
 ## 匹配优先级
 
@@ -385,11 +426,15 @@ class MyPlugin(Plugin):
 | hook | 签名 | 返回 | 运行时机 |
 |---|---|---|---|
 | `modify_json_schema` | `(_, root) -> root`（cli.py 以 `call("modify_json_schema", None, tree)` 两参调用，handler 形如 `(self, _ignored, root)`） | 新 root | **unwrap 之前**（组件先标记 → unwrap 保护） |
-| `modify_props` | `(node, props) -> props` | 新 props | 渲染时逐节点 |
-| `modify_style` | `(node, style) -> style` | 新 style | 渲染时逐节点 |
-| `modify_css_var` | `(vars) -> vars` | 新 vars | CSS 变量表 |
-| `generate_template` | `(root, code) -> code` | 新 JSX 字符串 | 最后 |
-| `inspect_draft` | `(root) -> list[dict]` | 附加 warning 列表 | inspect 阶段 |
+| `modify_style` | `(node, style) -> style` | 新 style | 逐节点遍历（所有 optimize pass 之后） |
+| `modify_props` | `(node, props) -> props` | 新 props | 同一次遍历，**在 modify_style 之后**（可读最终 style） |
+| `modify_css_var` | `(vars) -> vars` | 新 vars | `collect_variables` 之后、inspect 之前 |
+| `inspect_draft` | `(root) -> list[dict]` | 附加 warning 列表 | `run_all_inspect_rules` 之后，并入 `tree.inspect` |
+| `generate_template` | `(root, code) -> code` | 新 JSX/HTML 字符串 | 最后（beautify / HTML 包装之后，写盘之前） |
+
+> 6 个 hook 全部有调用点（`plugins/stages.py`）。历史坑：`modify_props` / `modify_css_var` / `generate_template` / `inspect_draft` 曾经只在 `plugins/base.py` 注册、没人调用，插件写了完全没效果。`tests/test_plugins.py::test_every_hook_has_a_call_site` 现在会拦住这种回归。
+>
+> 返回非预期类型（如 `modify_props` 返回 str）会被忽略并保留原值，不会污染 tree。
 
 ### 完整模板：name-recognizer（按层名识别非 INSTANCE 节点）
 
@@ -518,6 +563,8 @@ avocado <url> ... --trace-adapter=hook          # 只看插件 hook 统计
 - blockNameMatch + leaf/leafExtras 字段 + variantProperties/variants/dynamicProps：`packages/avocado/src/avocado/parser/component.py`
 - extractor registry（register_extractor / run_extractor）：`packages/avocado/src/avocado/parser/component_extractors.py`
 - **插件系统**（Plugin 基类 / hook 装饰器 / 6 hooks / discovery）：`packages/avocado/src/avocado/plugins/base.py`
+- **hook 执行点**（调用顺序、非 dict/非 str 返回值兜底）：`packages/avocado/src/avocado/plugins/stages.py`
+- **样式出口**（styleMode/styleProps/dropStyle → props）：`packages/avocado/src/avocado/generator/style_props.py`
 - 内置示例 preset（antd，18 entry）：`packages/avocado/src/avocado/_bundled/presets/antd.yaml`
 - 用户自建 preset/extractor 插件：`~/.avocado/presets/` + `~/.avocado/plugins/`（见 `docs/preset-guide.md`）
 - **name-recognizer 插件实例**：用户本地 `~/.avocado/plugins/` 下的自定义识别/提取插件（开源核心包不内置任何 extractor/recognizer）

@@ -5,7 +5,7 @@ avocado preset 是 YAML 文件，定义「Figma 组件 → 业务组件」的映
 ## 目录
 
 - [快速开始](#快速开始)
-- [9 字段完整说明](#9-字段完整说明)
+- [12 字段完整说明](#12-字段完整说明)
 - [componentId alias 模式（跨 file 双 compId）](#componentid-alias-模式跨-file-双-compid)
 - [leaf 字段判定（什么时候加）](#leaf-字段判定什么时候加)
 - [dynamicProps extractor 怎么写](#dynamicprops-extractor-怎么写)
@@ -40,9 +40,9 @@ Preset 文件放在 4 层查找路径之一（首次命中即用）：
 
 ---
 
-## 9 字段完整说明
+## 12 字段完整说明
 
-每个 preset entry 是一个 YAML dict，支持 9 个字段（YAML camelCase ↔ Python snake_case 自动转换）：
+每个 preset entry 是一个 YAML dict，支持 12 个字段（YAML camelCase ↔ Python snake_case 自动转换）：
 
 ### 1. `name`（必需）
 
@@ -163,6 +163,50 @@ d2c 调 `run_extractor("steps_items", scene_node)` → 返回 `{steps_items: [{t
   props:
     platform: ios           # → <SafeArea platform="ios">（固定值）
 ```
+
+### 10. `styleMode`（可选，默认 `inline`）
+
+识别成组件后，**这段 Figma 样式怎么写进代码**。默认 `inline` 保持现状——整块 style 原样塞进 `style={{...}}`，因为 Tailwind className 会叠加组件内建 padding/sizing（issue #35）。
+
+| 值 | 行为 | 适用 |
+|---|---|---|
+| `inline`（默认） | 保持 `style={{...}}` | 组件自己管 padding/sizing |
+| `className` | 转 Tailwind class | 纯布局 wrapper，无内建样式 |
+| `props` | 按 `styleProps` 搬进 props + `dropStyle` 删噪声 + 未命中保留 inline | 文字/图片等 props 驱动的组件 |
+
+`styleMode: props` 才能真正解决「生成的代码不像人写的」：
+
+```yaml
+- name: Text
+  component: Text
+  package: '@scope/ui'
+  styleMode: props
+  styleProps:
+    font-size: {prop: size, values: {"12": xs, "14": sm, "16": md}}
+    color: color            # 简写形式：原值 → 同名 prop
+  dropStyle: [width, height, flex-shrink]
+```
+
+输出从 `<Text style={{width:"70px", height:"22px", fontSize:"14px"}}>` 变成 `<Text size="sm" color="#333333">`。
+
+### 11. `styleProps`（`styleMode: props` 时使用）
+
+`{CSS 属性: prop 名}` 或 `{CSS 属性: {prop: 名, values: {Figma 值: prop 值}}}`。
+
+- 简写 `color: color`：原值直接给 prop，`"128px"` 会转成数字 `128`；
+- 长格式带 `values`：按 Figma 值查表，**查不到就保留 inline**（17px 不会被悄悄降级成 `size="default"`）；
+- 已存在的 prop（`props:` / `variantProperties` 给的）优先，重复的 CSS 键会被删除；
+- 省略 `prop` 时按 CSS 属性名转 camelCase（`font-size` → `fontSize`）。
+
+### 12. `dropStyle`（可选）
+
+要从输出里直接删掉的 CSS 属性。组件自己会算尺寸时，Figma 量出来的 `width` / `height` / `flex-shrink` 全是噪声——它们让代码像素钉死，且和弹性布局打架。
+
+```yaml
+dropStyle: [width, height, flex-shrink, flex-grow, flex-basis]
+```
+
+> 注意：`dropStyle` 是无条件删除。只删「组件确实不依赖」的属性，否则会掉保真。
 
 ---
 

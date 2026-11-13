@@ -50,6 +50,18 @@ class TreeNode:
     style: StyleDict = field(default_factory=dict)
     # CSS class name (set by generator/css.py when extracting to .css file)
     class_name: str | None = None
+    # How the generator emits this node's style (set from the preset entry by
+    # parser/component.py; plain nodes always behave as "className"):
+    #   "inline"    — keep style={{...}} (default; component internals win)
+    #   "className" — convert to tailwind classes (component has no internal
+    #                 padding/sizing to stack with)
+    #   "props"     — move style keys into component props via style_props,
+    #                 drop style_drop keys, keep misses inline
+    style_mode: str = "inline"
+    # {css-prop: prop-name | {"prop": name, "values": {figma-value: prop-value}}}
+    style_props: dict = field(default_factory=dict)
+    # CSS properties that are pure Figma geometry noise for this component
+    style_drop: tuple[str, ...] = ()
 
     # ── content ──
     text_content: str | None = None  # TEXT nodes

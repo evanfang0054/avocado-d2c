@@ -147,11 +147,16 @@ d["hint"]                                # 提示去掉 --dry-run 真跑
 | **HTML 片段模式** | `--html-fragment`（退回裸 `<div>` 片段，默认 --format html 输出完整文档） |
 | **清小数像素** | `--precision 0`（默认 `2` 保留 2 位小数；`0` 全取整到整数，平均偏移仅 ~0.08px；`1` 取整到 1 位；`unset` 用 Figma 原始 float32 值如 `99.66970825195312`） |
 | 人类可读输出（彩色 stderr） | `--human` (**破坏 JSON 契约**：d2c stdout 输出 JSX 文本；schema/paths/init --human 输出 Markdown/彩色文本到 stdout，AI agent 一律不用 --human) |
+| 未映射变量怎么输出 | `--var-fallback literal`（默认，保留字面值，不产生 `fig-var-*`）/ `--var-fallback fig-var`（调试用，保留 `var(--fig-var-<short>, value)`） |
+| **多断点合并成一个组件** | `--responsive mobile=1:2 --responsive tablet=1:3 --responsive desktop=1:4 --format react -o page.tsx`（需 ≥2 个画板 + `--css tailwind`；断点名由 CLI 提供，阈值按画板宽度取中点；envelope 见 `data.responsive`） |
+| 合并时删设计稿 chrome | `--strip-nodes "Status Bar"`（按图层名包含匹配，可重复；状态栏/选中框等画布装饰） |
+| 控制共享组件抽取 | `--shared-min-nodes 8`（默认 8；跨画板内容完全相同且 ≥N 节点的子树抽成 `Shared*` 组件） |
+| 指定合并后的组件名 | `--component-name AccessPage`（默认取第一个画板的图层名） |
 
 ## 互斥与优先级（务必遵守）
 
 - `--components <yaml>` 与 `--component-lib <name>` **互斥**，前者优先；错误在请求 Figma API 之前快速失败（Click `type=Path` 用 `exists=False`，业务内手动校验）
-- `--var-map <path>` 显式 > `--component-lib` 自动走 4 层查找 > 空映射 fallback `fig-var-<short>`
+- `--var-map <path>` 显式 > `--component-lib` 自动走 4 层查找 > 空映射时按 `--var-fallback` 处理（默认 `literal` 保留字面值；`fig-var` 才输出 `var(--fig-var-<short>, value)`）
 - `--format inline/tailwind` 已**废弃**（保留兼容，加 deprecation warning），新代码用 `--css inline|tailwind|class`。`mode.format` 显示映射后值，`mode.format_raw` 保留原始输入
 - `--css class` 必须在所有 style pass 之后；rerounded 后对 class_map 再跑一次（不要改顺序）
 - `-o /dev/stdout` / `-o -` 被禁止（JSX + envelope 双重写 stdout 会破坏 JSON 契约）
